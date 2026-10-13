@@ -11,6 +11,22 @@ contextBridge.exposeInMainWorld('api', {
     install: () => ipcRenderer.invoke('update:install'),
     onState: (cb) => ipcRenderer.on('update:state', (_e, s) => cb(s)),
   },
+  history: {
+    record: (track, seconds) => ipcRenderer.invoke('history:record', track, seconds),
+    get: (view, limit) => ipcRenderer.invoke('history:get', view, limit),
+    stats: () => ipcRenderer.invoke('history:stats'),
+    clear: () => ipcRenderer.invoke('history:clear'),
+  },
+  playlists: {
+    list: () => ipcRenderer.invoke('playlists:list'),
+    get: (id) => ipcRenderer.invoke('playlists:get', id),
+    create: (opts) => ipcRenderer.invoke('playlists:create', opts),
+    update: (id, patch) => ipcRenderer.invoke('playlists:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('playlists:delete', id),
+    add: (id, tracks) => ipcRenderer.invoke('playlists:add', id, tracks),
+    removeTrack: (id, trackKey) => ipcRenderer.invoke('playlists:remove', id, trackKey),
+    pickImage: () => ipcRenderer.invoke('playlists:pickImage'),
+  },
   log: {
     write: (level, source, message, data) => ipcRenderer.send('log:write', level, source, message, data),
     setVerbose: (on) => ipcRenderer.send('log:setVerbose', !!on),

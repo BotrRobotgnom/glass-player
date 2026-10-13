@@ -9,6 +9,7 @@ import { searchSoundCloud, resolveSoundCloud, isSoundCloudUrl } from './soundclo
 import { pickBest, splitArtistTitle } from './match.js';
 import { initUpdater, startAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
 import * as logger from './logger.js';
+import * as library from './library.js';
 import { registerDebugIpc, openDebugWindow, closeDebugWindow } from './debugWindow.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -171,6 +172,20 @@ async function createWindow() {
 
 registerDebugIpc();
 
+// Library: history and playlists
+ipcMain.handle('history:record', (_e, track, seconds) => library.recordPlay(track, seconds));
+ipcMain.handle('history:get', (_e, view, limit) => library.getHistory(String(view), Math.min(Number(limit) || 200, 500)));
+ipcMain.handle('history:stats', () => library.getHistoryStats());
+ipcMain.handle('history:clear', () => library.clearHistory());
+ipcMain.handle('playlists:list', () => library.listPlaylists());
+ipcMain.handle('playlists:get', (_e, id) => library.getPlaylist(String(id)));
+ipcMain.handle('playlists:create', (_e, opts) => library.createPlaylist(opts || {}));
+ipcMain.handle('playlists:update', (_e, id, patch) => library.updatePlaylist(String(id), patch || {}));
+ipcMain.handle('playlists:delete', (_e, id) => library.deletePlaylist(String(id)));
+ipcMain.handle('playlists:add', (_e, id, tracks) => library.addToPlaylist(String(id), tracks));
+ipcMain.handle('playlists:remove', (_e, id, trackKey) => library.removeFromPlaylist(String(id), String(trackKey)));
+ipcMain.handle('playlists:pickImage', () => library.pickImage(win));
+
 ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('update:get', () => getUpdateState());
 ipcMain.handle('update:check', () => checkForUpdates());
@@ -301,6 +316,8 @@ ipcMain.handle('findOfficial', async (_e, track) => {
 });
 
 app.whenReady().then(createWindow);
+
+app.on('before-quit', () => library.flushLibrary());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

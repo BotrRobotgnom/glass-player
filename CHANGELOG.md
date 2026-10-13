@@ -1,20 +1,36 @@
 # Changelog
 
 The version scheme is described in [VERSIONING.md](VERSIONING.md).
+Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
+The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
+
+## 0.1.0
+
+### Added
+- Listening history. A play counts after 30 seconds of real listening (or half of a short track). Per-track stats (play count, last played) are kept forever, because they are tiny; only the chronological "recent" log is capped at the latest 5000 plays. Three views: Recent, Most played, Forgotten (played at least twice, not heard for 30+ days). Clear history with a double click.
+- Local playlists: create, rename, add a cover image (cropped to a square, saved as 512 px), delete. Without an own image the cover is a mosaic of the first tracks. Add any track from results, queue, history or the now-playing panel with the playlist button; play or shuffle a whole playlist.
+- Data is stored as JSON in the app data folder (`history.json`, `playlists.json`, `covers/`), written atomically; a corrupt file is kept aside instead of being overwritten.
+
+### Fixed
+- The update check no longer fails with a wall of HTTP headers when GitHub has no published release. The app now asks the GitHub API first, shows "No published release on GitHub yet" (or "Couldn't reach GitHub" when offline) and only starts electron-updater when a newer version really exists. Errors are shortened in the UI and the log and reported once.
 
 ## 0.0.2
 
-- Fixed: the volume setting is now kept when the next track starts (YouTube and SoundCloud reset it on load).
-- Fixed: switching between the YouTube and SoundCloud versions keeps the playback position, and if the other version can't be played the player goes back to the previous one at the same moment.
+### Added
 - Search as you type, with suggestions from YouTube Music (arrow keys, Enter, Esc); links still wait for Enter.
+
+### Changed
 - Turning a source on or off now hides its results at once and refreshes the search.
+
+### Fixed
+- The volume setting is now kept when the next track starts (YouTube and SoundCloud reset it on load).
+- Switching between the YouTube and SoundCloud versions keeps the playback position, and if the other version can't be played the player goes back to the previous one at the same moment.
 - Older answers no longer overwrite newer search results.
 
 ## 0.0.1
 
-First scaffold.
-
-- Frosted-glass interface (Silver and Graphite themes) with a window effect (Acrylic / Mica on Windows 11, vibrancy on macOS) and a transparency slider.
+### Added
+- First scaffold: frosted-glass interface (Silver and Graphite themes) with a window effect (Acrylic / Mica on Windows 11, vibrancy on macOS) and a transparency slider.
 - Search across YouTube Music and SoundCloud; paste-a-link support.
 - YouTube priority: look for the official version of SoundCloud tracks.
 - Queue, shuffle, repeat, seeking, volume.

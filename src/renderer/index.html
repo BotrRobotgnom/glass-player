@@ -31,6 +31,11 @@
     <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></g></symbol>
     <symbol id="i-bug" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="8" width="10" height="12" rx="5"/><path d="M9 8a3 3 0 0 1 6 0M12 12v8M3 12h4M17 12h4M4 6l3 3M20 6l-3 3M4 19l3-3M20 19l-3-3"/></g></symbol>
+    <symbol id="i-list-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 6h12M3 12h8M3 18h8M17 14v8M13 18h8"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/></g></symbol>
     <symbol id="i-swap" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></symbol>
   </svg>
 
@@ -111,9 +116,13 @@
         <div class="tabs">
           <button class="tab active" data-tab="results" type="button" data-i18n="tabs.results">Results</button>
           <button class="tab" data-tab="queue" type="button"><span data-i18n="tabs.queue">Queue</span> <span id="queueCount" class="count"></span></button>
+          <button class="tab" data-tab="playlists" type="button" data-i18n="tabs.playlists">Playlists</button>
+          <button class="tab" data-tab="history" type="button" data-i18n="tabs.history">History</button>
         </div>
         <div id="results" class="list"></div>
         <div id="queue" class="list hidden"></div>
+        <div id="playlists" class="list hidden"></div>
+        <div id="history" class="list hidden"></div>
       </section>
 
       <aside class="now card">
@@ -130,6 +139,7 @@
             <span id="npSource" class="badge hidden"></span>
             <span id="npOfficial" class="badge official hidden" data-i18n="np.official">Official version</span>
           </div>
+          <button id="btnNpPlaylist" class="swap hidden" type="button"><svg><use href="#i-list-plus" /></svg><span data-i18n="row.addToPlaylist">Add to playlist</span></button>
           <button id="btnSwap" class="swap hidden" type="button"><svg><use href="#i-swap" /></svg><span></span></button>
           <p id="npStatus" class="status"></p>
         </div>
@@ -155,6 +165,29 @@
       </div>
     </footer>
 
+    <div id="plMenu" class="pl-menu card hidden" role="menu"></div>
+
+    <dialog id="plDialog" class="dialog card">
+      <form method="dialog" id="plForm" class="dialog-body">
+        <h3 id="plDialogTitle" data-i18n="playlist.new">New playlist</h3>
+        <div class="dialog-cover">
+          <div id="plCoverPreview" class="pl-cover big"></div>
+          <div class="dialog-cover-btns">
+            <button id="plPick" type="button" class="swap"><svg><use href="#i-image" /></svg><span data-i18n="playlist.chooseImage">Choose image…</span></button>
+            <button id="plRemoveCover" type="button" class="swap hidden"><svg><use href="#i-close" /></svg><span data-i18n="playlist.removeImage">Remove image</span></button>
+          </div>
+        </div>
+        <label class="dialog-field">
+          <span data-i18n="playlist.name">Name</span>
+          <input id="plName" type="text" maxlength="80" spellcheck="false" placeholder="My playlist" data-i18n-placeholder="playlist.namePlaceholder" />
+        </label>
+        <div class="dialog-actions">
+          <button id="plCancel" type="button" class="swap" data-i18n="common.cancel">Cancel</button>
+          <button id="plSave" type="submit" class="swap primary" data-i18n="common.save">Save</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toast" class="toast hidden"></div>
   </div>
 
@@ -165,5 +198,6 @@
   <script src="i18n.js"></script>
   <script src="engines.js"></script>
   <script src="app.js"></script>
+  <script src="library.js"></script>
 </body>
 </html>

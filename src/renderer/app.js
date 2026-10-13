@@ -130,6 +130,7 @@
       },
       onTime(cur, dur) {
         if (state.active !== name) return;
+        trackListening();
         state.cur = cur;
         if (dur) state.dur = dur;
         updateProgress();
@@ -147,8 +148,10 @@
   const engineOf = (name) => (name === 'youtube' ? ytEngine : scEngine);
 
   // ---------- Lists ----------
-  function makeRow(track, { onPlay, actionIcon, actionTitle, onAction }) {
+  // actions: [{ icon, title, onClick(button) }]; subText overrides the grey line under the title
+  function makeRow(track, { onPlay, actions = [], subText }) {
     const row = document.createElement('div');
+    row.dataset.key = track.source + ':' + track.id;
     row.className = 'row' + (isCurrent(track) ? ' current' : '') + (track.embeddable === false ? ' blocked' : '');
     if (track.embeddable === false) row.title = t('row.blocked');
 
@@ -172,7 +175,7 @@
     title.textContent = track.title;
     const sub = document.createElement('div');
     sub.className = 'sub';
-    sub.textContent = [track.artist, track.album].filter(Boolean).join(' · ');
+    sub.textContent = subText ?? [track.artist, track.album].filter(Boolean).join(' · ');
     meta.append(title, sub);
     row.appendChild(meta);
 
@@ -181,16 +184,21 @@
     dur.textContent = track.durationSec ? fmt(track.durationSec) : '';
     row.appendChild(dur);
 
-    const act = document.createElement('button');
-    act.className = 'act';
-    act.type = 'button';
-    act.title = actionTitle;
-    act.appendChild(icon(actionIcon));
-    act.addEventListener('click', (e) => {
-      e.stopPropagation();
-      onAction();
-    });
-    row.appendChild(act);
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+    for (const a of actions) {
+      const btn = document.createElement('button');
+      btn.className = 'act';
+      btn.type = 'button';
+      btn.title = a.title;
+      btn.appendChild(icon(a.icon));
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        a.onClick(btn);
+      });
+      acts.appendChild(btn);
+    }
+    row.appendChild(acts);
 
     row.addEventListener('click', onPlay);
     return row;
@@ -234,9 +242,10 @@
         box.appendChild(
           makeRow(track, {
             onPlay: () => playFromResults(track),
-            actionIcon: 'i-plus',
-            actionTitle: t('row.addToQueue'),
-            onAction: () => addToQueue(track),
+            actions: [
+              { icon: 'i-plus', title: t('row.addToQueue'), onClick: () => addToQueue(track) },
+              playlistAction(track),
+            ],
           }),
         );
       }
@@ -254,18 +263,34 @@
     state.queue.forEach((track, i) => {
       const row = makeRow(track, {
         onPlay: () => playIndex(i),
-        actionIcon: 'i-close',
-        actionTitle: t('row.removeFromQueue'),
-        onAction: () => removeFromQueue(i),
+        actions: [
+          { icon: 'i-close', title: t('row.removeFromQueue'), onClick: () => removeFromQueue(i) },
+          playlistAction(track),
+        ],
       });
       if (i === state.index) row.classList.add('current');
       box.appendChild(row);
     });
   }
 
+  // 'Add to playlist' button; the menu itself lives in library.js
+  const playlistAction = (track) => ({
+    icon: 'i-list-plus',
+    title: t('row.addToPlaylist'),
+    onClick: (btn) => window.GP.pickPlaylist(btn, track),
+  });
+
+  // highlight the playing track in every list (history and playlists are drawn by library.js)
+  function markCurrentRows() {
+    const n = state.now;
+    const keys = new Set(n ? [n.shown, n.yt, n.sc].filter(Boolean).map((x) => x.source + ':' + x.id) : []);
+    $$('.row[data-key]').forEach((row) => row.classList.toggle('current', keys.has(row.dataset.key)));
+  }
+
   function renderLists() {
     renderResults();
     renderQueue();
+    markCurrentRows();
   }
 
   // ---------- Queue ----------
@@ -282,12 +307,14 @@
     renderQueue();
   }
 
-  function playFromResults(track) {
-    state.queue = flatResults();
-    state.index = state.queue.findIndex((x) => sameTrack(x, track));
+  // Play `track` and make `tracks` the queue (used by results, history and playlists)
+  function playFrom(tracks, track) {
+    state.queue = [...tracks];
+    state.index = Math.max(0, state.queue.findIndex((x) => sameTrack(x, track)));
     renderQueue();
     playTrack(track);
   }
+  const playFromResults = (track) => playFrom(flatResults(), track);
 
   function playIndex(i) {
     if (i < 0 || i >= state.queue.length) return;
@@ -295,11 +322,41 @@
     playTrack(state.queue[i]);
   }
 
+  // ---------- Listening history ----------
+  // A play counts once the track has really been listened to for 30 s (or half of a short track),
+  // measured with the clock so seeking and pausing don't count.
+  const listen = { key: '', sec: 0, counted: false, last: 0 };
+  function resetListening() {
+    listen.key = '';
+    listen.sec = 0;
+    listen.counted = false;
+    listen.last = performance.now();
+  }
+  function trackListening() {
+    const now = performance.now();
+    const dt = (now - listen.last) / 1000;
+    listen.last = now;
+    const shown = state.now && state.now.shown;
+    if (!shown || !state.playing || listen.counted) return;
+    const k = shown.source + ':' + shown.id;
+    if (listen.key !== k) {
+      listen.key = k;
+      listen.sec = 0;
+    }
+    if (dt > 0 && dt < 2) listen.sec += dt;
+    const need = shown.durationSec || state.dur ? Math.min(30, (shown.durationSec || state.dur) / 2) : 30;
+    if (listen.sec >= need) {
+      listen.counted = true;
+      window.api.history.record(shown, listen.sec).then(() => window.GP.onHistoryChanged && window.GP.onHistoryChanged()).catch(() => {});
+    }
+  }
+
   // ---------- Playback ----------
   const timeout = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
   async function playTrack(track) {
     const token = ++state.token;
+    resetListening();
     log('info', `Play: ${track.artist} - ${track.title}`, { source: track.source, id: track.id });
     let yt = track.source === 'youtube' ? track : null;
     const sc = track.source === 'soundcloud' ? track : null;
@@ -395,6 +452,7 @@
     const q = state.queue;
     if (!q.length) return;
     if (auto && state.repeat === 'one' && state.now) {
+      resetListening(); // a repeated track counts as a new play
       engineOf(state.active).seek(0);
       engineOf(state.active).play();
       return;
@@ -460,6 +518,7 @@
     // The official version is the YouTube Music match found for a SoundCloud track
     const official = track.source === 'youtube' && !!n.sc;
     els.npOfficial.classList.toggle('hidden', !official);
+    $('#btnNpPlaylist').classList.remove('hidden');
 
     const other = track.source === 'youtube' ? n.sc : n.yt;
     if (other) {
@@ -552,9 +611,17 @@
 
   function showTab(name) {
     $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-    els.results.classList.toggle('hidden', name !== 'results');
-    els.queue.classList.toggle('hidden', name !== 'queue');
+    for (const panel of ['results', 'queue', 'history', 'playlists']) $('#' + panel).classList.toggle('hidden', name !== panel);
+    if (window.GP && window.GP.onTab) window.GP.onTab(name);
   }
+
+  // What library.js (history and playlists) needs from the player
+  window.GP = {
+    makeRow, groupTitle, emptyMessage, icon, toast, log, store, showTab, addToQueue, playFrom, sameTrack,
+    playlistAction, markCurrentRows,
+    currentTrack: () => (state.now ? state.now.shown : null),
+    shuffleArray: (a) => a.map((x) => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(([, x]) => x),
+  };
 
   // ---------- Events ----------
   // ----- search as you type, with suggestions -----

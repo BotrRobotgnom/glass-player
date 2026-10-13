@@ -37,6 +37,14 @@ With the effect off, transparency has nothing to show through, so the slider is 
 
 On Windows the blur is drawn by the system, and [Microsoft documents](https://learn.microsoft.com/windows/uwp/style/acrylic) that acrylic turns into a flat colour when the app window loses focus, when "Transparency effects" is off (Settings > Personalization > Colors), in Battery Saver mode, and on low-end hardware. So the blur is visible only while the player is the active window.
 
+## History and playlists
+
+Everything is stored locally, in the app data folder (`%APPDATA%\\Glass Player` on Windows, `~/.config/Glass Player` on Linux):
+`history.json`, `playlists.json` and `covers/`. Back them up or copy them to another PC to move your library.
+
+- **History**: a play counts after 30 s of listening. Stats per track are kept for good (they are tiny); the "Recent" log keeps the latest 5000 plays. *Most played* and *Forgotten* views are built from the same stats.
+- **Playlists**: name, optional cover image, tracks from both YouTube Music and SoundCloud.
+
 ## Developer mode and logs
 
 Settings > **Developer mode** reveals extra options: a **debug button** in the title bar and **verbose logging**.

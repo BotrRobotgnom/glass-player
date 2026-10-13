@@ -49,21 +49,49 @@ const newer = (a, b) => {
   return false;
 };
 
-async function manualCheck(cfg) {
+// Asks the GitHub API for the newest published (non-draft, non-prerelease) release.
+// Returns null when there is none. electron-updater's own lookup scrapes the releases page and fails
+// with a confusing "406" when nothing is published, so we ask the API first and only hand over to
+// electron-updater when a newer version really exists.
+async function fetchLatestRelease(cfg) {
   const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/releases/latest`, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'glass-player' },
+    signal: AbortSignal.timeout(15000),
   });
-  if (res.status === 404) {
-    setState({ status: 'none', code: 'noReleases' });
-    return;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GitHub answered HTTP ${res.status}`);
+  return res.json();
+}
+
+// Long technical errors (headers, XML) are cut down to something that fits in the UI and the log
+function shortMessage(err) {
+  const raw = String(err?.message || err || 'error');
+  const first = raw.split('\n')[0].replace(/\s+/g, ' ').trim();
+  return first.length > 220 ? first.slice(0, 217) + '...' : first;
+}
+
+// Known conditions get a code the renderer translates; anything else shows the short message
+function errorState(err) {
+  const raw = String(err?.message || err || '');
+  if (/unsupported provider/i.test(raw)) return { status: 'error', code: 'notConfigured' };
+  if (/unable to find latest version|production release exists|HttpError: (404|406)/i.test(raw)) {
+    return { status: 'none', code: 'noReleases' };
   }
-  if (!res.ok) throw new Error(`GitHub HTTP ${res.status}`);
-  const rel = await res.json();
-  if (newer(rel.tag_name, app.getVersion())) {
-    setState({ status: 'manual', version: rel.tag_name.replace(/^v/, ''), manualUrl: rel.html_url });
-  } else {
-    setState({ status: 'none' });
+  if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ERR_INTERNET_DISCONNECTED|ERR_NETWORK|fetch failed|timed? ?out|aborted/i.test(raw)) {
+    return { status: 'error', code: 'offline' };
   }
+  return { status: 'error', message: shortMessage(err) };
+}
+
+let failing = false; // electron-updater reports a failure twice (event + rejected promise): handle it once
+
+function failWith(err, where) {
+  if (failing) return;
+  failing = true;
+  setTimeout(() => (failing = false), 1000);
+  const st = errorState(err);
+  logger.log(st.code === 'noReleases' ? 'info' : 'warn', 'update', `Update check failed (${where}): ${shortMessage(err)}`, { code: st.code });
+  setState(st);
 }
 
 export async function checkForUpdates() {
@@ -78,11 +106,22 @@ export async function checkForUpdates() {
       return;
     }
     setState({ status: 'checking' });
+    const rel = await fetchLatestRelease(cfg);
+    if (!rel) {
+      logger.info('update', 'No published release found on GitHub (drafts are not visible to the app)', cfg);
+      setState({ status: 'none', code: 'noReleases' });
+      return;
+    }
+    const latest = String(rel.tag_name).replace(/^v/, '');
+    logger.info('update', `Latest published release: ${latest}, installed: ${app.getVersion()}`);
+    if (!newer(latest, app.getVersion())) {
+      setState({ status: 'none' });
+      return;
+    }
     if (canAutoUpdate) await autoUpdater.checkForUpdates();
-    else await manualCheck(cfg);
+    else setState({ status: 'manual', version: latest, manualUrl: rel.html_url });
   } catch (err) {
-    logger.warn('update', 'Update check failed', err);
-    setState({ status: 'error', message: err.message || String(err) });
+    failWith(err, 'check');
   }
 }
 
@@ -106,12 +145,7 @@ export function initUpdater(sendToRenderer) {
   autoUpdater.on('update-not-available', () => setState({ status: 'none' }));
   autoUpdater.on('download-progress', (p) => setState({ status: 'downloading', percent: Math.round(p.percent) }));
   autoUpdater.on('update-downloaded', (info) => setState({ status: 'downloaded', version: info.version, percent: 100 }));
-  autoUpdater.on('error', (err) => {
-    const msg = err.message || String(err);
-    logger.warn('update', 'Updater error', err);
-    if (/unsupported provider/i.test(msg)) setState({ status: 'error', code: 'notConfigured' });
-    else setState({ status: 'error', message: msg });
-  });
+  autoUpdater.on('error', (err) => failWith(err, 'updater'));
 }
 
 // Quiet check shortly after start (built versions only), then every 6 hours

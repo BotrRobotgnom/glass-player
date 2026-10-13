@@ -10,6 +10,7 @@ Format `A.B.C`, starting at **0.0.1**.
 
 Rules:
 - The version lives in `package.json` (the `version` field); everything else reads it from there. Change it with `npm version <new> --no-git-tag-version`.
-- Every new version gets an entry in `CHANGELOG.md`.
+- Every new version gets an entry in `CHANGELOG.md`, split into `### Added`, `### Changed` and `### Fixed` (only the parts that apply). The heading is exactly `## A.B.C`.
+- The GitHub release description is built from that entry automatically when the tag is pushed. Versions that were never published are added below it, so nothing is lost when a release skips some.
 - The version matches the git tag with a leading `v` (`v0.0.2`) and the GitHub release name.
 - Versions are never skipped or reused: a published tag is not rewritten. If a mistake is found, the fix ships as the next version.
