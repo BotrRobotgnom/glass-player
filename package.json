@@ -85,5 +85,10 @@
       "icon": "build/icon.png",
       "category": "public.app-category.music"
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BotrRobotgnom/glass-player.git"
+  },
+  "homepage": "https://github.com/BotrRobotgnom/glass-player"
 }
