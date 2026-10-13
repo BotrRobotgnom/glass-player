@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-theme="graphite">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+  />
+  <title>Debug log</title>
+  <link rel="stylesheet" href="debug.css" />
+</head>
+<body>
+  <header class="bar">
+    <input id="search" class="field" type="search" spellcheck="false" placeholder="Search logs…" data-i18n-placeholder="debug.search" />
+
+    <div id="levels" class="levels" role="group" aria-label="Levels" data-i18n-aria-label="debug.levels">
+      <button type="button" class="lvl on" data-level="debug">Debug</button>
+      <button type="button" class="lvl on" data-level="info">Info</button>
+      <button type="button" class="lvl on" data-level="warn">Warn</button>
+      <button type="button" class="lvl on" data-level="error">Error</button>
+    </div>
+
+    <select id="source" class="field" aria-label="Source" data-i18n-aria-label="debug.source">
+      <option value="" data-i18n="debug.allSources">All sources</option>
+    </select>
+
+    <label class="check"><input id="autoscroll" type="checkbox" checked /><span data-i18n="debug.autoscroll">Auto-scroll</span></label>
+    <label class="check"><input id="wrap" type="checkbox" /><span data-i18n="debug.wrap">Wrap lines</span></label>
+
+    <span class="spacer"></span>
+
+    <button id="btnCopy" class="btn" type="button" title="Copy the lines shown below" data-i18n="debug.copy" data-i18n-title="debug.copyTitle">Copy</button>
+    <button id="btnClear" class="btn" type="button" title="Clear the log (the log file is kept)" data-i18n="debug.clear" data-i18n-title="debug.clearTitle">Clear</button>
+    <button id="btnFile" class="btn" type="button" data-i18n="debug.showFile">Show log file</button>
+  </header>
+
+  <main id="log" class="log" role="log" aria-live="polite"></main>
+
+  <footer class="status">
+    <span id="count"></span>
+    <span id="note"></span>
+  </footer>
+
+  <script src="locales/en.js"></script>
+  <script src="i18n.js"></script>
+  <script src="debug.js"></script>
+</body>
+</html>

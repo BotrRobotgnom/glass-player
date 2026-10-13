@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en" data-theme="silver" data-effect="none">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Without this the YouTube iframe gets no origin and may fail with error 153 -->
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com https://w.soundcloud.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://w.soundcloud.com; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; media-src 'self' https:"
+  />
+  <title>Glass Player</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- SVG icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path fill="currentColor" d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m17 1 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></g></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></g></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 12h14"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 17v5M9 3h6l-1 7 3 3H7l3-3z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></g></symbol>
+    <symbol id="i-bug" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="8" width="10" height="12" rx="5"/><path d="M9 8a3 3 0 0 1 6 0M12 12v8M3 12h4M17 12h4M4 6l3 3M20 6l-3 3M4 19l3-3M20 19l-3-3"/></g></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></symbol>
+  </svg>
+
+  <div class="app">
+    <header class="titlebar">
+      <div class="brand"><span class="brand-dot"></span>Glass Player</div>
+
+      <form id="searchForm" class="search" autocomplete="off">
+        <svg class="ico"><use href="#i-search" /></svg>
+        <input id="q" type="text" spellcheck="false" placeholder="Track, artist, or a YouTube / SoundCloud link…" data-i18n-placeholder="search.placeholder" />
+      </form>
+
+      <div class="chips" role="group" aria-label="Sources" data-i18n-aria-label="sources.label">
+        <button class="chip on" data-source="youtube" type="button" title="YouTube Music (priority)" data-i18n-title="sources.youtube.title">YouTube Music</button>
+        <button class="chip on" data-source="soundcloud" type="button" title="SoundCloud" data-i18n-title="sources.soundcloud.title">SoundCloud</button>
+      </div>
+
+      <div class="win-controls">
+        <button id="btnDebug" class="wbtn hidden" type="button" title="Debug log" data-i18n-title="win.debug"><svg><use href="#i-bug" /></svg></button>
+        <button id="btnSettings" class="wbtn" type="button" title="Settings" data-i18n-title="win.settings"><svg><use href="#i-sliders" /></svg></button>
+        <button id="btnPin" class="wbtn" type="button" title="Always on top" data-i18n-title="win.pin"><svg><use href="#i-pin" /></svg></button>
+        <button id="btnMin" class="wbtn" type="button" title="Minimize" data-i18n-title="win.minimize"><svg><use href="#i-min" /></svg></button>
+        <button id="btnMax" class="wbtn" type="button" title="Maximize" data-i18n-title="win.maximize"><svg><use href="#i-max" /></svg></button>
+        <button id="btnClose" class="wbtn close" type="button" title="Close" data-i18n-title="win.close"><svg><use href="#i-close" /></svg></button>
+      </div>
+    </header>
+
+    <div id="settings" class="settings card hidden">
+      <label class="set-row" id="rowTransparency">
+        <span data-i18n="settings.transparency">Transparency</span>
+        <input id="transparency" type="range" min="0" max="60" value="30" />
+        <output id="transparencyVal">30%</output>
+      </label>
+      <label class="set-row">
+        <span data-i18n="settings.effect">Window effect</span>
+        <select id="effect"></select>
+      </label>
+      <p id="effectHint" class="hint hidden"></p>
+      <label class="set-row">
+        <span data-i18n="settings.theme">Theme</span>
+        <select id="theme">
+          <option value="silver" data-i18n="theme.silver">Silver</option>
+          <option value="graphite" data-i18n="theme.graphite">Graphite</option>
+        </select>
+      </label>
+      <label class="set-row check">
+        <input id="priorityYT" type="checkbox" checked />
+        <span data-i18n="settings.priority">YouTube priority: for SoundCloud tracks, look for the official version on YouTube Music</span>
+      </label>
+      <label class="set-row check">
+        <input id="autoVideo" type="checkbox" />
+        <span data-i18n="settings.autoVideo">Play the video automatically when a track has one</span>
+      </label>
+      <label class="set-row check">
+        <input id="devMode" type="checkbox" />
+        <span data-i18n="settings.devMode">Developer mode</span>
+      </label>
+      <div id="devOptions" class="dev-options hidden">
+        <label class="set-row check">
+          <input id="devDebugButton" type="checkbox" />
+          <span data-i18n="settings.debugButton">Show the debug button in the title bar</span>
+        </label>
+        <label class="set-row check">
+          <input id="devVerbose" type="checkbox" />
+          <span data-i18n="settings.verbose">Verbose logging (debug level)</span>
+        </label>
+      </div>
+      <div class="update-row">
+        <span id="updateText" class="update-text" data-i18n="update.label">Updates</span>
+        <button id="btnUpdate" class="swap" type="button" data-i18n="update.check">Check</button>
+      </div>
+      <p id="appVersion" class="app-version"></p>
+    </div>
+
+    <main class="main">
+      <section class="library card">
+        <div class="tabs">
+          <button class="tab active" data-tab="results" type="button" data-i18n="tabs.results">Results</button>
+          <button class="tab" data-tab="queue" type="button"><span data-i18n="tabs.queue">Queue</span> <span id="queueCount" class="count"></span></button>
+        </div>
+        <div id="results" class="list"></div>
+        <div id="queue" class="list hidden"></div>
+      </section>
+
+      <aside class="now card">
+        <div id="stage" class="stage" data-source="none">
+          <img id="cover" alt="" referrerpolicy="no-referrer" />
+          <div id="ytMount"></div>
+          <button id="btnVideo" class="video-btn hidden" type="button" title="Show video" data-i18n-title="video.show"><svg><use href="#i-play" /></svg></button>
+          <div class="stage-empty">♪</div>
+        </div>
+        <div class="np-info">
+          <h2 id="npTitle" data-i18n="np.idleTitle">Nothing playing</h2>
+          <p id="npArtist" data-i18n="np.idleSubtitle">Find a track or paste a link</p>
+          <div class="np-badges">
+            <span id="npSource" class="badge hidden"></span>
+            <span id="npOfficial" class="badge official hidden" data-i18n="np.official">Official version</span>
+          </div>
+          <button id="btnSwap" class="swap hidden" type="button"><svg><use href="#i-swap" /></svg><span></span></button>
+          <p id="npStatus" class="status"></p>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="transport">
+      <div class="buttons">
+        <button id="btnShuffle" class="tbtn" type="button" title="Shuffle" data-i18n-title="transport.shuffle"><svg><use href="#i-shuffle" /></svg></button>
+        <button id="btnPrev" class="tbtn" type="button" title="Previous" data-i18n-title="transport.prev"><svg><use href="#i-prev" /></svg></button>
+        <button id="btnPlay" class="tbtn big" type="button" title="Play / pause" data-i18n-title="transport.play"><svg><use href="#i-play" /></svg></button>
+        <button id="btnNext" class="tbtn" type="button" title="Next" data-i18n-title="transport.next"><svg><use href="#i-next" /></svg></button>
+        <button id="btnRepeat" class="tbtn" type="button" title="Repeat" data-i18n-title="transport.repeat"><svg><use href="#i-repeat" /></svg></button>
+      </div>
+      <div class="seek">
+        <span id="tCur" class="time">0:00</span>
+        <input id="seek" type="range" min="0" max="1000" value="0" />
+        <span id="tDur" class="time">0:00</span>
+      </div>
+      <div class="volume">
+        <button id="btnMute" class="tbtn" type="button" title="Volume" data-i18n-title="transport.volume"><svg><use href="#i-volume" /></svg></button>
+        <input id="volume" type="range" min="0" max="100" value="80" />
+      </div>
+    </footer>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <!-- SoundCloud Widget: the sound comes from this iframe, which stays off-screen -->
+  <iframe id="scFrame" class="sc-frame" title="SoundCloud" allow="autoplay"></iframe>
+
+  <script src="locales/en.js"></script>
+  <script src="i18n.js"></script>
+  <script src="engines.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

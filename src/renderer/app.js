@@ -1,0 +1,817 @@
+(() => {
+  'use strict';
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const t = window.t;
+
+  // Everything worth knowing goes to the log (shown in the Debug log window)
+  const log = (level, message, data) => {
+    try {
+      window.api.log.write(level, 'app', message, data);
+    } catch {
+      /* logging must never break the player */
+    }
+  };
+  window.addEventListener('error', (e) => log('error', 'Uncaught error: ' + e.message, { at: `${e.filename}:${e.lineno}:${e.colno}` }));
+  window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason;
+    log('error', 'Unhandled promise rejection: ' + (r && r.message ? r.message : String(r)), r && r.stack ? { stack: r.stack } : undefined);
+  });
+
+  // https://developers.google.com/youtube/iframe_api_reference#onError
+  const YT_ERRORS = {
+    2: 'invalid video id',
+    5: 'HTML5 player error',
+    100: 'video not found or private',
+    101: 'embedding disabled by the owner',
+    150: 'embedding disabled by the owner',
+    153: 'embedder origin missing (referrer policy)',
+  };
+
+  // ---------- Settings (localStorage; the server port is fixed, so the origin is stable) ----------
+  const store = {
+    get(key, fallback) {
+      try {
+        const v = localStorage.getItem('gp.' + key);
+        return v === null ? fallback : JSON.parse(v);
+      } catch {
+        return fallback;
+      }
+    },
+    set(key, value) {
+      try {
+        localStorage.setItem('gp.' + key, JSON.stringify(value));
+      } catch {
+        /* storage unavailable: ignore */
+      }
+    },
+  };
+
+  const state = {
+    results: { youtube: [], soundcloud: [] },
+    queue: [],
+    index: -1,
+    now: null, // { shown, yt, sc }
+    playing: false,
+    repeat: 'off', // off | all | one
+    shuffle: false,
+    sources: store.get('sources', { youtube: true, soundcloud: true }),
+    priorityYT: store.get('priorityYT', true),
+    volume: store.get('volume', 80),
+    muted: false,
+    cur: 0,
+    dur: 0,
+    seeking: false,
+    token: 0,
+    errorStreak: 0,
+    active: null, // 'youtube' | 'soundcloud'
+  };
+
+  const els = {
+    form: $('#searchForm'), q: $('#q'), results: $('#results'), queue: $('#queue'), queueCount: $('#queueCount'),
+    stage: $('#stage'), cover: $('#cover'), npTitle: $('#npTitle'), npArtist: $('#npArtist'),
+    npSource: $('#npSource'), npOfficial: $('#npOfficial'), npStatus: $('#npStatus'), btnSwap: $('#btnSwap'),
+    btnPlay: $('#btnPlay'), btnPrev: $('#btnPrev'), btnNext: $('#btnNext'), btnShuffle: $('#btnShuffle'),
+    btnRepeat: $('#btnRepeat'), btnMute: $('#btnMute'), seek: $('#seek'), volume: $('#volume'),
+    btnVideo: $('#btnVideo'), tCur: $('#tCur'), tDur: $('#tDur'), toast: $('#toast'), settings: $('#settings'),
+  };
+
+  // ---------- Helpers ----------
+  const fmt = (sec) => {
+    sec = Math.max(0, Math.floor(sec || 0));
+    const m = Math.floor(sec / 60);
+    const s = String(sec % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  };
+  const setFill = (input) => input.style.setProperty('--fill', (input.value / input.max) * 100 + '%');
+  const icon = (id) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', '#' + id);
+    svg.appendChild(use);
+    return svg;
+  };
+  const sameTrack = (a, b) => a && b && a.source === b.source && a.id === b.id;
+  const isCurrent = (track) => !!state.now && [state.now.shown, state.now.yt, state.now.sc].some((x) => sameTrack(x, track));
+  const sourceLabel = (s) => t(s === 'youtube' ? 'group.youtube' : 'group.soundcloud');
+
+  let toastTimer = null;
+  function toast(msg) {
+    log('info', 'Toast: ' + msg);
+    els.toast.textContent = msg;
+    els.toast.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toast.classList.add('hidden'), 4000);
+  }
+
+  function setStatus(msg) {
+    els.npStatus.textContent = msg || '';
+  }
+
+  // ---------- Engines ----------
+  function handlersFor(name) {
+    return {
+      onState(s) {
+        if (state.active !== name) return;
+        log('debug', `${name} player state: ${s}`);
+        if (s === 'playing') {
+          state.playing = true;
+          state.errorStreak = 0;
+          setStatus('');
+        } else if (s === 'paused') {
+          state.playing = false;
+        } else if (s === 'ended') {
+          state.playing = false;
+          onEnded();
+        }
+        updatePlayButton();
+      },
+      onTime(cur, dur) {
+        if (state.active !== name) return;
+        state.cur = cur;
+        if (dur) state.dur = dur;
+        updateProgress();
+      },
+      onError(code) {
+        if (state.active !== name) return;
+        log('warn', `${name} player error`, { code, meaning: YT_ERRORS[code] });
+        onPlayError(code);
+      },
+    };
+  }
+
+  const ytEngine = new window.Engines.YouTubeEngine('ytMount', handlersFor('youtube'));
+  const scEngine = new window.Engines.SoundCloudEngine('scFrame', handlersFor('soundcloud'));
+  const engineOf = (name) => (name === 'youtube' ? ytEngine : scEngine);
+
+  // ---------- Lists ----------
+  function makeRow(track, { onPlay, actionIcon, actionTitle, onAction }) {
+    const row = document.createElement('div');
+    row.className = 'row' + (isCurrent(track) ? ' current' : '') + (track.embeddable === false ? ' blocked' : '');
+    if (track.embeddable === false) row.title = t('row.blocked');
+
+    if (track.cover) {
+      const img = document.createElement('img');
+      img.src = track.cover;
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.alt = '';
+      row.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'thumb-ph';
+      row.appendChild(ph);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = track.title;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    sub.textContent = [track.artist, track.album].filter(Boolean).join(' · ');
+    meta.append(title, sub);
+    row.appendChild(meta);
+
+    const dur = document.createElement('div');
+    dur.className = 'dur';
+    dur.textContent = track.durationSec ? fmt(track.durationSec) : '';
+    row.appendChild(dur);
+
+    const act = document.createElement('button');
+    act.className = 'act';
+    act.type = 'button';
+    act.title = actionTitle;
+    act.appendChild(icon(actionIcon));
+    act.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onAction();
+    });
+    row.appendChild(act);
+
+    row.addEventListener('click', onPlay);
+    return row;
+  }
+
+  function groupTitle(text) {
+    const h = document.createElement('div');
+    h.className = 'group-title';
+    h.textContent = text;
+    return h;
+  }
+
+  function emptyMessage(text) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = text;
+    return empty;
+  }
+
+  function flatResults() {
+    return [...state.results.youtube, ...state.results.soundcloud];
+  }
+
+  function renderResults() {
+    const box = els.results;
+    box.replaceChildren();
+    if (!flatResults().length) {
+      box.appendChild(emptyMessage(t('results.empty')));
+      return;
+    }
+    const groups = [
+      [t('group.youtube'), state.results.youtube],
+      [t('group.soundcloud'), state.results.soundcloud],
+    ];
+    for (const [label, tracks] of groups) {
+      if (!tracks.length) continue;
+      box.appendChild(groupTitle(label));
+      for (const track of tracks) {
+        box.appendChild(
+          makeRow(track, {
+            onPlay: () => playFromResults(track),
+            actionIcon: 'i-plus',
+            actionTitle: t('row.addToQueue'),
+            onAction: () => addToQueue(track),
+          }),
+        );
+      }
+    }
+  }
+
+  function renderQueue() {
+    const box = els.queue;
+    box.replaceChildren();
+    els.queueCount.textContent = state.queue.length ? `(${state.queue.length})` : '';
+    if (!state.queue.length) {
+      box.appendChild(emptyMessage(t('queue.empty')));
+      return;
+    }
+    state.queue.forEach((track, i) => {
+      const row = makeRow(track, {
+        onPlay: () => playIndex(i),
+        actionIcon: 'i-close',
+        actionTitle: t('row.removeFromQueue'),
+        onAction: () => removeFromQueue(i),
+      });
+      if (i === state.index) row.classList.add('current');
+      box.appendChild(row);
+    });
+  }
+
+  function renderLists() {
+    renderResults();
+    renderQueue();
+  }
+
+  // ---------- Queue ----------
+  function addToQueue(track) {
+    state.queue.push(track);
+    renderQueue();
+    toast(t('toast.added'));
+  }
+
+  function removeFromQueue(i) {
+    state.queue.splice(i, 1);
+    if (i < state.index) state.index--;
+    else if (i === state.index) state.index = -1;
+    renderQueue();
+  }
+
+  function playFromResults(track) {
+    state.queue = flatResults();
+    state.index = state.queue.findIndex((x) => sameTrack(x, track));
+    renderQueue();
+    playTrack(track);
+  }
+
+  function playIndex(i) {
+    if (i < 0 || i >= state.queue.length) return;
+    state.index = i;
+    playTrack(state.queue[i]);
+  }
+
+  // ---------- Playback ----------
+  const timeout = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
+
+  async function playTrack(track) {
+    const token = ++state.token;
+    log('info', `Play: ${track.artist} - ${track.title}`, { source: track.source, id: track.id });
+    let yt = track.source === 'youtube' ? track : null;
+    const sc = track.source === 'soundcloud' ? track : null;
+    let shown = track;
+
+    // YouTube priority: for a SoundCloud track, look for the official version on YouTube Music
+    if (sc && state.priorityYT) {
+      setStatus(t('np.looking'));
+      renderNow({ shown: sc, yt: null, sc });
+      const found = await Promise.race([window.api.findOfficial(sc), timeout(4000, null)]);
+      if (token !== state.token) return; // the user already picked another track
+      log('info', found && found.track ? 'Using the official YouTube Music version' : 'No official version, playing from SoundCloud');
+      if (found && found.track) {
+        yt = found.track;
+        shown = yt;
+      }
+    }
+
+    state.now = { shown, yt, sc };
+    startEngine(shown);
+    renderNow(state.now);
+    renderLists();
+  }
+
+  function startEngine(track) {
+    const name = track.source;
+    const other = engineOf(name === 'youtube' ? 'soundcloud' : 'youtube');
+    state.active = name;
+    other.pause();
+    state.cur = 0;
+    state.dur = track.durationSec || 0;
+    state.playing = true;
+    updateProgress();
+    updatePlayButton();
+    setStatus('');
+    engineOf(name)
+      .load(track)
+      .catch((err) => {
+        log('error', `${name} engine failed to load`, { error: err.message });
+        toast(err.message || t('play.engineFailed'));
+        state.playing = false;
+        updatePlayButton();
+      });
+  }
+
+  function switchVersion() {
+    const n = state.now;
+    if (!n) return;
+    const target = n.shown.source === 'youtube' ? n.sc : n.yt;
+    if (!target) return;
+    state.now = { ...n, shown: target };
+    state.token++;
+    startEngine(target);
+    renderNow(state.now);
+  }
+
+  function onPlayError(code) {
+    const n = state.now;
+    // Some videos forbid embedding: then try the SoundCloud version, if there is one
+    if (n && n.shown.source === 'youtube' && n.sc) {
+      toast(t('play.embedBlocked'));
+      switchVersion();
+      return;
+    }
+    state.errorStreak++;
+    toast(t('play.failed', { code: code ? ` (code ${code})` : '' }));
+    if (state.errorStreak <= Math.max(3, state.queue.length)) setTimeout(() => next(true), 900);
+  }
+
+  function onEnded() {
+    next(true);
+  }
+
+  function next(auto = false) {
+    const q = state.queue;
+    if (!q.length) return;
+    if (auto && state.repeat === 'one' && state.now) {
+      engineOf(state.active).seek(0);
+      engineOf(state.active).play();
+      return;
+    }
+    let i;
+    if (state.shuffle && q.length > 1) {
+      do {
+        i = Math.floor(Math.random() * q.length);
+      } while (i === state.index);
+    } else {
+      i = state.index + 1;
+      if (i >= q.length) {
+        if (state.repeat === 'all' || !auto) i = 0;
+        else {
+          state.playing = false;
+          updatePlayButton();
+          return;
+        }
+      }
+    }
+    playIndex(i);
+  }
+
+  function prev() {
+    if (state.cur > 3 && state.active) {
+      engineOf(state.active).seek(0);
+      return;
+    }
+    const q = state.queue;
+    if (!q.length) return;
+    playIndex(state.index <= 0 ? q.length - 1 : state.index - 1);
+  }
+
+  function togglePlay() {
+    if (!state.active || !state.now) return;
+    const engine = engineOf(state.active);
+    if (state.playing) engine.pause();
+    else engine.play();
+  }
+
+  // ---------- UI updates ----------
+  function renderNow(n) {
+    const track = n.shown;
+    els.npTitle.textContent = track.title || t('np.untitled');
+    els.npArtist.textContent = [track.artist, track.album].filter(Boolean).join(' · ');
+    els.stage.dataset.source = track.source;
+    els.cover.src = track.cover || '';
+
+    // Video stays hidden unless the user asks for it (or the setting says to show it) and the track has one
+    const key = track.source + ':' + track.id;
+    if (key !== shownKey) {
+      shownKey = key;
+      videoOn = autoVideo.checked && track.source === 'youtube' && !!track.hasVideo;
+    }
+    const canVideo = track.source === 'youtube' && !!track.hasVideo;
+    els.btnVideo.classList.toggle('hidden', !canVideo);
+    updateVideo();
+
+    els.npSource.textContent = sourceLabel(track.source);
+    els.npSource.className = 'badge ' + (track.source === 'youtube' ? 'yt' : 'sc');
+    els.npSource.classList.remove('hidden');
+
+    // The official version is the YouTube Music match found for a SoundCloud track
+    const official = track.source === 'youtube' && !!n.sc;
+    els.npOfficial.classList.toggle('hidden', !official);
+
+    const other = track.source === 'youtube' ? n.sc : n.yt;
+    if (other) {
+      els.btnSwap.classList.remove('hidden');
+      $('span', els.btnSwap).textContent = t(other.source === 'youtube' ? 'np.swapToYouTube' : 'np.swapToSoundCloud');
+    } else {
+      els.btnSwap.classList.add('hidden');
+    }
+
+    document.title = `${track.title} — Glass Player`;
+    updateMediaSession(track);
+  }
+
+  let shownKey = '';
+  let videoOn = false;
+  function updateVideo() {
+    const on = videoOn && !els.btnVideo.classList.contains('hidden');
+    els.stage.dataset.video = on ? 'on' : 'off';
+    els.btnVideo.title = t(on ? 'video.hide' : 'video.show');
+    $('use', els.btnVideo).setAttribute('href', on ? '#i-close' : '#i-play');
+  }
+
+  function updatePlayButton() {
+    const use = $('use', els.btnPlay);
+    use.setAttribute('href', state.playing ? '#i-pause' : '#i-play');
+  }
+
+  function updateProgress() {
+    if (!state.seeking) {
+      els.seek.value = state.dur ? Math.min(1000, (state.cur / state.dur) * 1000) : 0;
+      setFill(els.seek);
+      els.tCur.textContent = fmt(state.cur);
+    }
+    els.tDur.textContent = fmt(state.dur);
+  }
+
+  function updateVolumeUI() {
+    els.volume.value = state.muted ? 0 : state.volume;
+    setFill(els.volume);
+    $('use', els.btnMute).setAttribute('href', state.muted || state.volume === 0 ? '#i-mute' : '#i-volume');
+  }
+
+  function applyVolume() {
+    const v = state.muted ? 0 : state.volume;
+    ytEngine.setVolume(v);
+    scEngine.setVolume(v);
+    updateVolumeUI();
+  }
+
+  function updateMediaSession(track) {
+    if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artist,
+      artwork: track.cover ? [{ src: track.cover }] : [],
+    });
+  }
+
+  // ---------- Search ----------
+  async function runSearch(query) {
+    log('info', `Search: "${query}"`);
+    const sources = Object.entries(state.sources)
+      .filter(([, on]) => on)
+      .map(([name]) => name);
+    showTab('results');
+    els.results.replaceChildren(emptyMessage(t('results.loading')));
+
+    try {
+      const res = await window.api.search(query, sources);
+      state.results = { youtube: res.youtube || [], soundcloud: res.soundcloud || [] };
+      renderResults();
+      for (const [src, msg] of Object.entries(res.errors || {})) {
+        toast(`${sourceLabel(src)}: ${msg}`);
+      }
+      if (!flatResults().length && !Object.keys(res.errors || {}).length) {
+        els.results.replaceChildren(emptyMessage(t('results.none')));
+      }
+    } catch (err) {
+      renderResults();
+      log('error', 'Search failed', { error: String(err.message || err) });
+      toast(t('toast.searchError', { message: err.message || err }));
+    }
+  }
+
+  function showTab(name) {
+    $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    els.results.classList.toggle('hidden', name !== 'results');
+    els.queue.classList.toggle('hidden', name !== 'queue');
+  }
+
+  // ---------- Events ----------
+  els.form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = els.q.value.trim();
+    if (q) runSearch(q);
+  });
+
+  $$('.chip').forEach((chip) => {
+    const name = chip.dataset.source;
+    chip.classList.toggle('on', !!state.sources[name]);
+    chip.addEventListener('click', () => {
+      state.sources[name] = !state.sources[name];
+      // at least one source must stay enabled
+      if (!state.sources.youtube && !state.sources.soundcloud) state.sources[name] = true;
+      $$('.chip').forEach((c) => c.classList.toggle('on', !!state.sources[c.dataset.source]));
+      store.set('sources', state.sources);
+    });
+  });
+
+  $$('.tab').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  els.btnPlay.addEventListener('click', togglePlay);
+  els.btnNext.addEventListener('click', () => next(false));
+  els.btnPrev.addEventListener('click', prev);
+  els.btnSwap.addEventListener('click', switchVersion);
+
+  els.btnShuffle.addEventListener('click', () => {
+    state.shuffle = !state.shuffle;
+    els.btnShuffle.classList.toggle('on', state.shuffle);
+  });
+  els.btnRepeat.addEventListener('click', () => {
+    state.repeat = state.repeat === 'off' ? 'all' : state.repeat === 'all' ? 'one' : 'off';
+    els.btnRepeat.classList.toggle('on', state.repeat !== 'off');
+    els.btnRepeat.title = t('transport.repeat.' + state.repeat);
+  });
+
+  els.seek.addEventListener('pointerdown', () => (state.seeking = true));
+  els.seek.addEventListener('input', () => {
+    setFill(els.seek);
+    els.tCur.textContent = fmt((els.seek.value / 1000) * state.dur);
+  });
+  els.seek.addEventListener('change', () => {
+    if (state.active && state.dur) engineOf(state.active).seek((els.seek.value / 1000) * state.dur);
+    state.seeking = false;
+  });
+
+  els.volume.addEventListener('input', () => {
+    state.volume = Number(els.volume.value);
+    state.muted = false;
+    store.set('volume', state.volume);
+    applyVolume();
+  });
+  els.btnMute.addEventListener('click', () => {
+    state.muted = !state.muted;
+    applyVolume();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName);
+    if (e.code === 'Space' && !typing) {
+      e.preventDefault();
+      togglePlay();
+    } else if (e.code === 'KeyF' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      els.q.focus();
+      els.q.select();
+    }
+  });
+
+  if ('mediaSession' in navigator) {
+    const ms = navigator.mediaSession;
+    try {
+      ms.setActionHandler('play', togglePlay);
+      ms.setActionHandler('pause', togglePlay);
+      ms.setActionHandler('previoustrack', prev);
+      ms.setActionHandler('nexttrack', () => next(false));
+    } catch {
+      /* the browser may not support some actions */
+    }
+  }
+
+  // ---------- Window ----------
+  $('#btnMin').addEventListener('click', () => window.api.win.minimize());
+  $('#btnMax').addEventListener('click', () => window.api.win.toggleMaximize());
+  $('#btnClose').addEventListener('click', () => window.api.win.close());
+  let pinned = false;
+  $('#btnPin').addEventListener('click', (e) => {
+    pinned = !pinned;
+    window.api.win.alwaysOnTop(pinned);
+    e.currentTarget.classList.toggle('active', pinned);
+  });
+
+  // ---------- Appearance settings ----------
+  // Two independent things:
+  //  * Window effect: the system draws a blurred copy of what is behind the window (acrylic / mica / vibrancy).
+  //  * Transparency: how much of that blurred backdrop shows through our tint. The tint covers the whole
+  //    window, so fill = 1 - transparency. Without an effect the window is opaque (fill = 1).
+  const slider = $('#transparency');
+  const sliderVal = $('#transparencyVal');
+  const effectSel = $('#effect');
+  const effectHint = $('#effectHint');
+  const theme = $('#theme');
+  const priority = $('#priorityYT');
+  const root = document.documentElement;
+
+  let effect = 'none';
+  let windowInfo = { effects: ['none'], hint: null, platform: '' };
+
+  // The hint under the effect picker depends on the platform and on the chosen effect
+  function updateEffectHint() {
+    const info = windowInfo;
+    let key = null;
+    if (info.hint) key = 'effect.hint.' + info.hint;
+    else if (info.effects.length === 1) key = 'effect.hint.none';
+    else if (effect === 'mica') key = 'effect.hint.mica';
+    else if (info.platform === 'win32' && effect !== 'none') key = info.transparencyEnabled === false ? 'effect.hint.noTransparency' : 'effect.hint.inactive';
+    effectHint.textContent = key ? t(key) : '';
+    effectHint.classList.toggle('hidden', !key);
+  }
+
+  function applyAppearance() {
+    const transparency = Number(slider.value);
+    const blurred = effect !== 'none';
+    root.dataset.effect = effect;
+    root.style.setProperty('--tint', String(blurred ? 1 - transparency / 100 : 1));
+    sliderVal.textContent = transparency + '%';
+    slider.disabled = !blurred;
+    $('#rowTransparency').classList.toggle('disabled', !blurred);
+    setFill(slider);
+  }
+
+  async function chooseEffect(next, persist) {
+    effect = next;
+    effectSel.value = next;
+    try {
+      await window.api.win.setEffect(next);
+    } catch {
+      /* the main process keeps the previous effect */
+    }
+    if (persist) store.set('effect', next);
+    log('info', `Window effect: ${next}`);
+    applyAppearance();
+    updateEffectHint();
+  }
+
+  async function initWindowEffect() {
+    let info = { effects: ['none'], defaultEffect: 'none', hint: null };
+    try {
+      info = await window.api.win.getInfo();
+    } catch {
+      /* use the opaque defaults */
+    }
+    effectSel.replaceChildren(
+      ...info.effects.map((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = t('effect.' + name);
+        return opt;
+      }),
+    );
+    windowInfo = info;
+    const saved = store.get('effect', info.defaultEffect);
+    await chooseEffect(info.effects.includes(saved) ? saved : info.defaultEffect, false);
+  }
+
+  slider.value = store.get('transparency', 30);
+  slider.addEventListener('input', () => {
+    store.set('transparency', Number(slider.value));
+    applyAppearance();
+  });
+  effectSel.addEventListener('change', () => chooseEffect(effectSel.value, true));
+
+  theme.value = store.get('theme', 'silver');
+  root.dataset.theme = theme.value;
+  theme.addEventListener('change', () => {
+    root.dataset.theme = theme.value;
+    store.set('theme', theme.value);
+  });
+
+  const autoVideo = $('#autoVideo');
+  autoVideo.checked = store.get('autoVideo', false);
+  autoVideo.addEventListener('change', () => store.set('autoVideo', autoVideo.checked));
+  els.btnVideo.addEventListener('click', () => {
+    videoOn = !videoOn;
+    updateVideo();
+    log('info', `Video ${videoOn ? 'shown' : 'hidden'}`);
+  });
+
+  priority.checked = state.priorityYT;
+  priority.addEventListener('change', () => {
+    state.priorityYT = priority.checked;
+    store.set('priorityYT', state.priorityYT);
+  });
+
+  $('#btnSettings').addEventListener('click', (e) => {
+    e.stopPropagation();
+    els.settings.classList.toggle('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if (!els.settings.contains(e.target)) els.settings.classList.add('hidden');
+  });
+
+  // ---------- Developer mode ----------
+  const devMode = $('#devMode');
+  const devOptions = $('#devOptions');
+  const devDebugButton = $('#devDebugButton');
+  const devVerbose = $('#devVerbose');
+  const btnDebug = $('#btnDebug');
+
+  function applyDevMode() {
+    const on = devMode.checked;
+    devOptions.classList.toggle('hidden', !on);
+    btnDebug.classList.toggle('hidden', !(on && devDebugButton.checked));
+    window.api.log.setVerbose(on && devVerbose.checked);
+  }
+  devMode.checked = store.get('devMode', false);
+  devDebugButton.checked = store.get('devDebugButton', true);
+  devVerbose.checked = store.get('devVerbose', false);
+  for (const [el, key] of [[devMode, 'devMode'], [devDebugButton, 'devDebugButton'], [devVerbose, 'devVerbose']]) {
+    el.addEventListener('change', () => {
+      store.set(key, el.checked);
+      applyDevMode();
+    });
+  }
+  btnDebug.addEventListener('click', () => window.api.debug.open());
+  applyDevMode();
+
+  window.api.version().then((v) => {
+    $('#appVersion').textContent = 'Glass Player v' + v;
+  }).catch(() => {});
+
+  // ---------- Updates ----------
+  const updText = $('#updateText');
+  const updBtn = $('#btnUpdate');
+  let updStatus = 'idle';
+  let notified = '';
+
+  function renderUpdate(s) {
+    updStatus = s.status;
+    updBtn.disabled = false;
+    updBtn.textContent = t('update.check');
+    if (s.status === 'checking') {
+      updText.textContent = t('update.checking');
+      updBtn.disabled = true;
+    } else if (s.status === 'downloading') {
+      updText.textContent = t('update.downloading', { version: s.version || '', percent: s.percent || 0 });
+      updBtn.disabled = true;
+    } else if (s.status === 'downloaded') {
+      updText.textContent = t('update.downloaded', { version: s.version });
+      updBtn.textContent = t('update.restart');
+    } else if (s.status === 'manual') {
+      updText.textContent = t(s.isPortable ? 'update.availablePortable' : 'update.available', { version: s.version });
+      updBtn.textContent = t('update.openPage');
+    } else if (s.status === 'none') {
+      updText.textContent = s.code ? t('update.code.' + s.code) : t('update.upToDate');
+    } else if (s.status === 'error') {
+      updText.textContent = s.code ? t('update.code.' + s.code) : t('update.failed', { message: s.message || 'error' });
+    } else {
+      updText.textContent = t('update.label');
+    }
+    // one toast per discovered version
+    const key = s.status + ':' + (s.version || '');
+    if ((s.status === 'downloaded' || s.status === 'manual') && notified !== key) {
+      notified = key;
+      toast(t(s.status === 'downloaded' ? 'update.toastReady' : 'update.toastAvailable', { version: s.version }));
+    }
+  }
+
+  updBtn.addEventListener('click', () => {
+    if (updStatus === 'downloaded' || updStatus === 'manual') window.api.update.install();
+    else window.api.update.check();
+  });
+  window.api.update.onState(renderUpdate);
+  window.api.update.get().then(renderUpdate).catch(() => {});
+
+  // ---------- Start ----------
+  window.i18n.apply();
+  applyAppearance();
+  initWindowEffect();
+  applyVolume();
+  updatePlayButton();
+  updateProgress();
+  renderLists();
+  showTab('results');
+  els.q.focus();
+})();

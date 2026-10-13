@@ -1,0 +1,123 @@
+import { Innertube } from 'youtubei.js';
+import * as logger from './logger.js';
+
+let ytPromise = null;
+
+function getYT() {
+  if (!ytPromise) {
+    // retrieve_player: false, because we never decrypt streams: the official iframe player does the playback
+    logger.debug('youtube', 'Creating Innertube session');
+    ytPromise = Innertube.create({ retrieve_player: false, generate_session_locally: true })
+      .then((yt) => {
+        logger.info('youtube', 'Innertube session ready');
+        return yt;
+      })
+      .catch((e) => {
+        logger.error('youtube', 'Innertube session failed', e);
+        ytPromise = null;
+        throw e;
+      });
+  }
+  return ytPromise;
+}
+
+function bestThumb(thumbs = []) {
+  if (!thumbs.length) return '';
+  const sorted = [...thumbs].sort((a, b) => (b.width || 0) - (a.width || 0));
+  return sorted[0].url || '';
+}
+
+function toTrack(item) {
+  if (!item?.id) return null;
+  return {
+    id: item.id,
+    source: 'youtube',
+    title: item.title || '',
+    artist: (item.artists || item.authors || []).map((a) => a.name).filter(Boolean).join(', '),
+    album: item.album?.name || '',
+    durationSec: item.duration?.seconds || 0,
+    cover: bestThumb(item.thumbnails),
+    url: `https://music.youtube.com/watch?v=${item.id}`,
+    // 'song' = audio-only art track (static cover); 'video' = a real clip
+    hasVideo: item.item_type === 'video',
+  };
+}
+
+function shelfItems(result) {
+  const shelf = result.songs ?? result.contents?.find((c) => c?.contents);
+  return shelf?.contents ?? [];
+}
+
+// type: 'song' = official audio tracks (art tracks), 'video' = clips / remixes / live versions
+export async function searchYouTube(query, { type = 'song', limit = 20 } = {}) {
+  const yt = await getYT();
+  const res = await yt.music.search(query, { type });
+  const items = type === 'video' && res.videos ? res.videos.contents : shelfItems(res);
+  return [...items]
+    .filter((i) => i.item_type === 'song' || i.item_type === 'video')
+    .map(toTrack)
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+export function extractVideoId(input) {
+  const s = String(input).trim();
+  if (/^[\w-]{11}$/.test(s)) return s;
+  try {
+    const u = new URL(s);
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1, 12);
+    if (/(^|\.)youtube\.com$/.test(u.hostname)) {
+      const v = u.searchParams.get('v');
+      if (v) return v.slice(0, 11);
+      const m = u.pathname.match(/\/(shorts|embed)\/([\w-]{11})/);
+      if (m) return m[2];
+    }
+  } catch {
+    /* not a URL */
+  }
+  return null;
+}
+
+export async function getYouTubeTrack(videoId) {
+  const yt = await getYT();
+  const info = await yt.getBasicInfo(videoId);
+  const b = info.basic_info;
+  return {
+    id: videoId,
+    source: 'youtube',
+    title: b.title || '',
+    artist: (b.author || '').replace(/ - Topic$/, ''),
+    album: '',
+    durationSec: b.duration || 0,
+    cover: bestThumb(b.thumbnail),
+    url: `https://music.youtube.com/watch?v=${videoId}`,
+    hasVideo: !/ - Topic$/.test(b.author || ''),
+  };
+}
+
+// The IFrame player refuses videos whose owner disabled embedding (error 150/101).
+// The oEmbed endpoint answers 401 for exactly those, so we can know before trying to play.
+// Unknown (network trouble etc.) counts as embeddable: the player's own error handling still applies.
+const embedCache = new Map();
+
+export async function isEmbeddable(videoId) {
+  if (embedCache.has(videoId)) return embedCache.get(videoId);
+  let ok = true;
+  try {
+    const url = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      ok = false;
+      logger.debug('youtube', `Not embeddable: ${videoId}`, { status: res.status });
+    }
+    embedCache.set(videoId, ok);
+  } catch (err) {
+    logger.debug('youtube', `Embed check failed for ${videoId}`, { error: err.message });
+  }
+  return ok;
+}
+
+export async function markEmbeddable(tracks) {
+  await Promise.all(tracks.map(async (tr) => (tr.embeddable = await isEmbeddable(tr.id))));
+  return tracks;
+}

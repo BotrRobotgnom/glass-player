@@ -1,0 +1,89 @@
+{
+  "name": "glass-player",
+  "productName": "Glass Player",
+  "version": "0.0.1",
+  "description": "Glass-style desktop player: YouTube Music and SoundCloud in one window",
+  "type": "module",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "release": "electron-builder --win --publish always",
+    "release:linux": "electron-builder --linux --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "youtubei.js": "^18.1.0"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "author": "BotrRobotgnom (https://github.com/BotrRobotgnom)",
+  "build": {
+    "appId": "com.botr.glassplayer",
+    "productName": "Glass Player",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "draft"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Glass Player",
+      "artifactName": "GlassPlayer-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "GlassPlayer-Portable-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "artifactName": "GlassPlayer-${version}.${ext}"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.png",
+      "category": "public.app-category.music"
+    }
+  }
+}
