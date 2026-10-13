@@ -2,6 +2,14 @@
 
 The version scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 0.0.2
+
+- Fixed: the volume setting is now kept when the next track starts (YouTube and SoundCloud reset it on load).
+- Fixed: switching between the YouTube and SoundCloud versions keeps the playback position, and if the other version can't be played the player goes back to the previous one at the same moment.
+- Search as you type, with suggestions from YouTube Music (arrow keys, Enter, Esc); links still wait for Enter.
+- Turning a source on or off now hides its results at once and refreshes the search.
+- Older answers no longer overwrite newer search results.
+
 ## 0.0.1
 
 First scaffold.

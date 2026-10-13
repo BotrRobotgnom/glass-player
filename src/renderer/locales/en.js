@@ -65,6 +65,7 @@ window.__locales.en = {
   'np.official': 'Official version',
   'np.swapToYouTube': 'Switch to the official YouTube Music version',
   'np.swapToSoundCloud': 'Play the SoundCloud version',
+  'np.switchFailed': "Couldn't switch versions, back to the previous one",
   'np.looking': 'Looking for the official version on YouTube Music…',
 
   'play.embedBlocked': "This video can't be played here, playing the SoundCloud version",

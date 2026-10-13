@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './server.js';
-import { searchYouTube, extractVideoId, getYouTubeTrack, markEmbeddable } from './youtube.js';
+import { searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable } from './youtube.js';
 import { searchSoundCloud, resolveSoundCloud, isSoundCloudUrl } from './soundcloud.js';
 import { pickBest, splitArtistTitle } from './match.js';
 import { initUpdater, startAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
@@ -210,6 +210,17 @@ ipcMain.handle('win:setEffect', (_e, effect) => {
   } catch (err) {
     logger.error('window', `Setting window effect "${effect}" failed`, err);
     return false;
+  }
+});
+
+ipcMain.handle('suggest', async (_e, query) => {
+  const q = String(query || '').trim();
+  if (q.length < 2) return [];
+  try {
+    return await suggestYouTube(q);
+  } catch (err) {
+    logger.debug('search', 'Suggestions failed', err);
+    return [];
   }
 });
 

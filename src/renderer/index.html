@@ -40,7 +40,8 @@
 
       <form id="searchForm" class="search" autocomplete="off">
         <svg class="ico"><use href="#i-search" /></svg>
-        <input id="q" type="text" spellcheck="false" placeholder="Track, artist, or a YouTube / SoundCloud link…" data-i18n-placeholder="search.placeholder" />
+        <input id="q" type="text" spellcheck="false" placeholder="Track, artist, or a YouTube / SoundCloud link…" data-i18n-placeholder="search.placeholder" role="combobox" aria-expanded="false" aria-controls="suggest" />
+        <div id="suggest" class="suggest card hidden" role="listbox"></div>
       </form>
 
       <div class="chips" role="group" aria-label="Sources" data-i18n-aria-label="sources.label">

@@ -60,6 +60,20 @@ export async function searchYouTube(query, { type = 'song', limit = 20 } = {}) {
     .slice(0, limit);
 }
 
+// Search-as-you-type suggestions from YouTube Music
+export async function suggestYouTube(query) {
+  const yt = await getYT();
+  const sections = await yt.music.getSearchSuggestions(query);
+  const out = [];
+  for (const section of sections || []) {
+    for (const item of section.contents || []) {
+      const text = item?.suggestion?.toString?.().trim();
+      if (text && !out.includes(text)) out.push(text);
+    }
+  }
+  return out.slice(0, 8);
+}
+
 export function extractVideoId(input) {
   const s = String(input).trim();
   if (/^[\w-]{11}$/.test(s)) return s;

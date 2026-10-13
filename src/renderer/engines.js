@@ -74,6 +74,7 @@
     _onState(code) {
       // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
       if (code === 1) {
+        if (this.player.setVolume) this.player.setVolume(this.volume);
         this._startPoll();
         this.h.onState('playing');
       } else if (code === 2) {
@@ -104,9 +105,10 @@
       this.h.onTime(p.getCurrentTime() || 0, p.getDuration() || 0);
     }
 
-    async load(track) {
+    async load(track, startAt = 0) {
       await this.init();
-      this.player.loadVideoById(track.id);
+      this.player.loadVideoById({ videoId: track.id, startSeconds: Math.max(0, Math.floor(startAt)) });
+      this.player.setVolume(this.volume); // keep the chosen volume for every new track
     }
 
     play() {
@@ -135,6 +137,7 @@
       this.widget = null;
       this.volume = 80;
       this.duration = 0;
+      this.pendingSeek = 0;
       this.wanted = false; // whether this engine is the one that should be playing right now
     }
 
@@ -166,6 +169,11 @@
         if (this.wanted) w.play();
       });
       w.bind(E.PLAY, () => {
+        w.setVolume(this.volume); // the widget resets its volume whenever a new track loads
+        if (this.pendingSeek > 0) {
+          w.seekTo(this.pendingSeek * 1000);
+          this.pendingSeek = 0;
+        }
         w.getDuration((ms) => {
           this.duration = (ms || 0) / 1000;
         });
@@ -177,7 +185,8 @@
       w.bind(E.ERROR, () => this.h.onError && this.h.onError('soundcloud'));
     }
 
-    async load(track) {
+    async load(track, startAt = 0) {
+      this.pendingSeek = startAt;
       if (!(window.SC && window.SC.Widget)) await loadScript('https://w.soundcloud.com/player/api.js');
       this.wanted = true;
       this.duration = track.durationSec || 0;
@@ -186,7 +195,7 @@
         this.widget = window.SC.Widget(this.frame);
         this._bind();
       } else {
-        this.widget.load(track.url, this._opts());
+        this.widget.load(track.url, { ...this._opts(), callback: () => this.widget.setVolume(this.volume) });
       }
     }
 

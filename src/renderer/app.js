@@ -118,6 +118,7 @@
         if (s === 'playing') {
           state.playing = true;
           state.errorStreak = 0;
+          state.revert = null; // the new version is playing, nothing to go back to
           setStatus('');
         } else if (s === 'paused') {
           state.playing = false;
@@ -209,8 +210,10 @@
     return empty;
   }
 
+  // only results from the enabled sources are shown
+  const shownResults = (src) => (state.sources[src] ? state.results[src] : []);
   function flatResults() {
-    return [...state.results.youtube, ...state.results.soundcloud];
+    return [...shownResults('youtube'), ...shownResults('soundcloud')];
   }
 
   function renderResults() {
@@ -221,8 +224,8 @@
       return;
     }
     const groups = [
-      [t('group.youtube'), state.results.youtube],
-      [t('group.soundcloud'), state.results.soundcloud],
+      [t('group.youtube'), shownResults('youtube')],
+      [t('group.soundcloud'), shownResults('soundcloud')],
     ];
     for (const [label, tracks] of groups) {
       if (!tracks.length) continue;
@@ -321,19 +324,19 @@
     renderLists();
   }
 
-  function startEngine(track) {
+  function startEngine(track, startAt = 0) {
     const name = track.source;
     const other = engineOf(name === 'youtube' ? 'soundcloud' : 'youtube');
     state.active = name;
     other.pause();
-    state.cur = 0;
+    state.cur = startAt;
     state.dur = track.durationSec || 0;
     state.playing = true;
     updateProgress();
     updatePlayButton();
     setStatus('');
     engineOf(name)
-      .load(track)
+      .load(track, startAt)
       .catch((err) => {
         log('error', `${name} engine failed to load`, { error: err.message });
         toast(err.message || t('play.engineFailed'));
@@ -347,18 +350,36 @@
     if (!n) return;
     const target = n.shown.source === 'youtube' ? n.sc : n.yt;
     if (!target) return;
+    // remember where we were: if the other version cannot be played, go back to the same moment
+    state.revert = { now: n, at: state.cur };
     state.now = { ...n, shown: target };
     state.token++;
-    startEngine(target);
+    log('info', `Switching version to ${target.source}`, { at: Math.round(state.cur) });
+    startEngine(target, state.cur);
     renderNow(state.now);
   }
 
   function onPlayError(code) {
     const n = state.now;
+    // A manual version switch failed: return to the previous version at the same position
+    if (state.revert) {
+      const r = state.revert;
+      state.revert = null;
+      state.now = r.now;
+      state.token++;
+      log('warn', 'Version switch failed, restoring the previous version', { at: Math.round(r.at) });
+      toast(t('np.switchFailed'));
+      startEngine(r.now.shown, r.at);
+      renderNow(r.now);
+      return;
+    }
     // Some videos forbid embedding: then try the SoundCloud version, if there is one
     if (n && n.shown.source === 'youtube' && n.sc) {
       toast(t('play.embedBlocked'));
-      switchVersion();
+      state.now = { ...n, shown: n.sc };
+      state.token++;
+      startEngine(n.sc);
+      renderNow(state.now);
       return;
     }
     state.errorStreak++;
@@ -498,7 +519,11 @@
   }
 
   // ---------- Search ----------
+  let searchId = 0;
+  let lastQuery = '';
   async function runSearch(query) {
+    const id = ++searchId;
+    lastQuery = query;
     log('info', `Search: "${query}"`);
     const sources = Object.entries(state.sources)
       .filter(([, on]) => on)
@@ -508,6 +533,7 @@
 
     try {
       const res = await window.api.search(query, sources);
+      if (id !== searchId) return; // a newer search has started: drop this answer
       state.results = { youtube: res.youtube || [], soundcloud: res.soundcloud || [] };
       renderResults();
       for (const [src, msg] of Object.entries(res.errors || {})) {
@@ -517,6 +543,7 @@
         els.results.replaceChildren(emptyMessage(t('results.none')));
       }
     } catch (err) {
+      if (id !== searchId) return;
       renderResults();
       log('error', 'Search failed', { error: String(err.message || err) });
       toast(t('toast.searchError', { message: err.message || err }));
@@ -530,8 +557,103 @@
   }
 
   // ---------- Events ----------
+  // ----- search as you type, with suggestions -----
+  const suggestBox = $('#suggest');
+  let suggestItems = [];
+  let suggestIndex = -1;
+  let suggestId = 0;
+  let liveTimer = null;
+  let suggestTimer = null;
+
+  function closeSuggest() {
+    suggestItems = [];
+    suggestIndex = -1;
+    suggestBox.classList.add('hidden');
+    suggestBox.replaceChildren();
+  }
+
+  function highlightSuggest() {
+    [...suggestBox.children].forEach((el, i) => el.classList.toggle('active', i === suggestIndex));
+  }
+
+  function showSuggest(items) {
+    suggestItems = items;
+    suggestIndex = -1;
+    suggestBox.replaceChildren(
+      ...items.map((text, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'suggest-item';
+        b.setAttribute('role', 'option');
+        b.append(icon('i-search'), Object.assign(document.createElement('span'), { textContent: text }));
+        // mousedown, so it fires before the input loses focus
+        b.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          pickSuggestion(i);
+        });
+        return b;
+      }),
+    );
+    suggestBox.classList.toggle('hidden', !items.length);
+  }
+
+  function pickSuggestion(i) {
+    const text = suggestItems[i];
+    if (!text) return;
+    els.q.value = text;
+    closeSuggest();
+    clearTimeout(liveTimer);
+    runSearch(text);
+  }
+
+  async function fetchSuggestions(q) {
+    const id = ++suggestId;
+    let list = [];
+    try {
+      list = await window.api.suggest(q);
+    } catch {
+      /* no suggestions */
+    }
+    if (id !== suggestId || document.activeElement !== els.q) return;
+    showSuggest(list.filter((s) => s.toLowerCase() !== q.toLowerCase()));
+  }
+
+  els.q.addEventListener('input', () => {
+    const q = els.q.value.trim();
+    clearTimeout(liveTimer);
+    clearTimeout(suggestTimer);
+    suggestId++;
+    if (q.length < 2) {
+      closeSuggest();
+      return;
+    }
+    const isLink = /^https?:\/\//i.test(q);
+    if (!isLink) suggestTimer = setTimeout(() => fetchSuggestions(q), 150);
+    // results follow the text after a short pause (links wait for Enter)
+    if (!isLink) liveTimer = setTimeout(() => runSearch(q), 500);
+  });
+
+  els.q.addEventListener('keydown', (e) => {
+    if (!suggestItems.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const n = suggestItems.length;
+      const pos = (suggestIndex + 1 + (e.key === 'ArrowDown' ? 1 : -1) + n + 1) % (n + 1);
+      suggestIndex = pos - 1; // -1 = back to the typed text
+      highlightSuggest();
+      if (suggestIndex >= 0) els.q.value = suggestItems[suggestIndex];
+    } else if (e.key === 'Escape') {
+      closeSuggest();
+    }
+  });
+  els.q.addEventListener('blur', () => setTimeout(closeSuggest, 100));
+
   els.form.addEventListener('submit', (e) => {
     e.preventDefault();
+    clearTimeout(liveTimer);
+    clearTimeout(suggestTimer);
+    suggestId++;
+    closeSuggest();
     const q = els.q.value.trim();
     if (q) runSearch(q);
   });
@@ -545,6 +667,10 @@
       if (!state.sources.youtube && !state.sources.soundcloud) state.sources[name] = true;
       $$('.chip').forEach((c) => c.classList.toggle('on', !!state.sources[c.dataset.source]));
       store.set('sources', state.sources);
+      log('info', 'Sources changed', state.sources);
+      // hide results of a disabled source at once; refresh so a re-enabled source is searched again
+      renderResults();
+      if (lastQuery) runSearch(lastQuery);
     });
   });
 
