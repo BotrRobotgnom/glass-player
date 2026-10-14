@@ -4,6 +4,15 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.1.3
+
+### Added
+- A clear (x) button at the right of the search field.
+
+### Changed
+- The cover in the now-playing block is square when there is no video, and smoothly changes to 16:9 when the video is shown.
+- When the YouTube version of a track is known not to play (embedding disabled), the switch button is disabled and says "YouTube version unavailable".
+
 ## 0.1.2
 
 ### Added

@@ -5,6 +5,8 @@ window.__locales = window.__locales || {};
 window.__locales.en = {
   'app.name': 'Glass Player',
 
+  'search.clear': 'Clear',
+  'np.ytUnavailable': 'YouTube version unavailable',
   'search.placeholder': 'Track, artist, or a YouTube / SoundCloud link…',
   'sources.label': 'Sources',
   'sources.youtube.title': 'YouTube Music (priority)',

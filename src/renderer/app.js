@@ -434,7 +434,7 @@
     const n = state.now;
     if (!n) return;
     const target = n.shown.source === 'youtube' ? n.sc : n.yt;
-    if (!target) return;
+    if (!target || els.btnSwap.disabled) return;
     // remember where we were: if the other version cannot be played, go back to the same moment
     state.revert = { now: n, at: state.cur };
     state.now = { ...n, shown: target };
@@ -450,18 +450,19 @@
     if (state.revert) {
       const r = state.revert;
       state.revert = null;
-      state.now = r.now;
+      // the YouTube version just failed to play: remember it so the switch button can say so
+      state.now = r.now.shown.source === 'soundcloud' && r.now.yt ? { ...r.now, ytBlocked: true } : r.now;
       state.token++;
       log('warn', 'Version switch failed, restoring the previous version', { at: Math.round(r.at) });
       toast(t('np.switchFailed'));
-      startEngine(r.now.shown, r.at);
-      renderNow(r.now);
+      startEngine(state.now.shown, r.at);
+      renderNow(state.now);
       return;
     }
     // Some videos forbid embedding: then try the SoundCloud version, if there is one
     if (n && n.shown.source === 'youtube' && n.sc) {
       toast(t('play.embedBlocked'));
-      state.now = { ...n, shown: n.sc };
+      state.now = { ...n, shown: n.sc, ytBlocked: true };
       state.token++;
       startEngine(n.sc);
       renderNow(state.now);
@@ -551,7 +552,10 @@
     const other = track.source === 'youtube' ? n.sc : n.yt;
     if (other) {
       els.btnSwap.classList.remove('hidden');
-      $('span', els.btnSwap).textContent = t(other.source === 'youtube' ? 'np.swapToYouTube' : 'np.swapToSoundCloud');
+      // a YouTube version that cannot be embedded is known to fail: show it as unavailable instead of offering it
+      const blocked = other.source === 'youtube' && (n.ytBlocked || other.embeddable === false);
+      els.btnSwap.disabled = blocked;
+      $('span', els.btnSwap).textContent = t(blocked ? 'np.ytUnavailable' : other.source === 'youtube' ? 'np.swapToYouTube' : 'np.swapToSoundCloud');
     } else {
       els.btnSwap.classList.add('hidden');
     }
@@ -696,6 +700,7 @@
     const text = suggestItems[i];
     if (!text) return;
     els.q.value = text;
+    syncClear();
     closeSuggest();
     clearTimeout(liveTimer);
     runSearch(text);
@@ -713,6 +718,14 @@
     showSuggest(list.filter((s) => s.toLowerCase() !== q.toLowerCase()));
   }
 
+  const syncClear = () => $('#qClear').classList.toggle('hidden', !els.q.value);
+  $('#qClear').addEventListener('mousedown', (e) => e.preventDefault()); // keep the focus in the field
+  $('#qClear').addEventListener('click', () => {
+    els.q.value = '';
+    els.q.dispatchEvent(new Event('input'));
+    els.q.focus();
+  });
+  els.q.addEventListener('input', syncClear);
   els.q.addEventListener('input', () => {
     const q = els.q.value.trim();
     clearTimeout(liveTimer);
@@ -737,6 +750,7 @@
       suggestIndex = pos - 1; // -1 = back to the typed text
       highlightSuggest();
       if (suggestIndex >= 0) els.q.value = suggestItems[suggestIndex];
+      syncClear();
     } else if (e.key === 'Escape') {
       closeSuggest();
     }
