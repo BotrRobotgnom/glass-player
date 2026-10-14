@@ -9,12 +9,15 @@ contextBridge.exposeInMainWorld('api', {
     get: () => ipcRenderer.invoke('update:get'),
     check: () => ipcRenderer.invoke('update:check'),
     install: () => ipcRenderer.invoke('update:install'),
+    setAuto: (on) => ipcRenderer.send('update:setAuto', !!on),
+    changelog: (force) => ipcRenderer.invoke('changelog:get', !!force),
     onState: (cb) => ipcRenderer.on('update:state', (_e, s) => cb(s)),
   },
   history: {
     record: (track, seconds) => ipcRenderer.invoke('history:record', track, seconds),
     get: (view, limit) => ipcRenderer.invoke('history:get', view, limit),
     stats: () => ipcRenderer.invoke('history:stats'),
+    remove: (trackKey) => ipcRenderer.invoke('history:remove', trackKey),
     clear: () => ipcRenderer.invoke('history:clear'),
   },
   playlists: {

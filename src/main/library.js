@@ -142,6 +142,17 @@ export function getHistoryStats() {
   return { tracks: Object.keys(h.tracks).length, plays: h.log.length };
 }
 
+// Forget one track completely: its stats and its entries in the recent log
+export function removeFromHistory(trackKey) {
+  const h = historyStore.load();
+  if (!h.tracks[trackKey]) return false;
+  delete h.tracks[trackKey];
+  h.log = h.log.filter((e) => e.k !== trackKey);
+  historyStore.changed();
+  logger.debug('library', 'Removed a track from history', { key: trackKey });
+  return true;
+}
+
 export function clearHistory() {
   const h = historyStore.load();
   h.tracks = {};

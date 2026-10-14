@@ -4,6 +4,20 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.1.1
+
+### Added
+- "What's new" window: opens by itself when an update is found, and from Settings > Changelog. Release notes come from GitHub (with images and videos you add to a release), newer versions on top marked "New", then a line showing your installed version and the older ones folded. Offline it falls back to the changelog bundled with the app. Buttons: Update / Restart & update, Close, Skip this version.
+- Settings: "Check for updates automatically" checkbox next to the Changelog and Check buttons.
+- History: remove a single track (the red button that replaces the duration on hover).
+
+### Changed
+- Track lists: the duration sits at the far right, hover buttons appear to its left, and the remove button (history, queue, playlist) takes the duration's place in red.
+
+### Fixed
+- Debug log window: a switched-off level filter is now clearly different from a hovered one (faded, dashed, hollow dot), and the source dropdown is centred.
+- The update check ignores stray "untagged-…" releases and picks the newest properly tagged one.
+
 ## 0.1.0
 
 ### Added

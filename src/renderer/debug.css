@@ -56,17 +56,23 @@ input.field { width: 240px; }
   height: 30px; padding: 0 12px; border-radius: 10px; cursor: pointer;
   background: transparent; border: 1px solid var(--edge); color: var(--dim);
 }
-.lvl:hover, .btn:hover { background: var(--hover); color: var(--text); }
-.lvl.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.btn:hover { background: var(--hover); color: var(--text); }
+/* A level that is switched off is faded with a dashed border; switched on it is solid and coloured.
+   Hovering only brightens the text, so it can never look like the "on" state. */
+.lvl { display: inline-flex; align-items: center; gap: 6px; opacity: 0.6; border-style: dashed; }
+.lvl::before { content: ''; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; }
+.lvl:hover { opacity: 0.9; color: var(--text); }
+.lvl.on { opacity: 1; border-style: solid; color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.lvl.on::before { background: currentColor; }
 .lvl[data-level='warn'].on { border-color: #d9a21b; background: rgba(217, 162, 27, 0.18); }
 .lvl[data-level='error'].on { border-color: #e5484d; background: rgba(229, 72, 77, 0.18); }
-.lvl[data-level='debug'].on { border-color: var(--edge); background: var(--hover); }
+.lvl[data-level='debug'].on { border-color: #8791a8; background: rgba(135, 145, 168, 0.28); }
 .check { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); cursor: pointer; }
 .check input { accent-color: var(--accent); }
 
 /* Customizable select: a themed, rounded dropdown instead of the native one */
 select.field, select.field::picker(select) { appearance: base-select; }
-select.field { padding-right: 6px; }
+select.field { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 0 10px; line-height: 1; }
 select.field::picker(select) {
   background: var(--popup); color: var(--text);
   border: 1px solid var(--edge); border-radius: 12px; padding: 4px; margin-top: 4px;

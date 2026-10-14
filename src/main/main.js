@@ -7,7 +7,8 @@ import { startServer } from './server.js';
 import { searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable } from './youtube.js';
 import { searchSoundCloud, resolveSoundCloud, isSoundCloudUrl } from './soundcloud.js';
 import { pickBest, splitArtistTitle } from './match.js';
-import { initUpdater, startAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
+import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
+import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
 import * as library from './library.js';
 import { registerDebugIpc, openDebugWindow, closeDebugWindow } from './debugWindow.js';
@@ -137,7 +138,8 @@ async function createWindow() {
   // Page console output and failures go to the log too
   win.webContents.on('console-message', (event) => {
     const isMain = !event.frame || event.frame === win.webContents.mainFrame;
-    const level = isMain ? rendererLevel(event.level) : 'debug'; // embedded players are noisy
+    let level = isMain ? rendererLevel(event.level) : 'debug'; // embedded players are noisy
+    if (/Unrecognized feature:/.test(event.message)) level = 'debug'; // harmless: YouTube's player asks for newer permissions
     logger.log(level, isMain ? 'renderer' : 'frame', event.message, event.sourceId ? { at: `${event.sourceId}:${event.lineNumber}` } : undefined);
   });
   win.webContents.on('did-fail-load', (_e, code, desc, url) => logger.error('renderer', 'Page failed to load', { code, desc, url }));
@@ -176,6 +178,7 @@ registerDebugIpc();
 ipcMain.handle('history:record', (_e, track, seconds) => library.recordPlay(track, seconds));
 ipcMain.handle('history:get', (_e, view, limit) => library.getHistory(String(view), Math.min(Number(limit) || 200, 500)));
 ipcMain.handle('history:stats', () => library.getHistoryStats());
+ipcMain.handle('history:remove', (_e, trackKey) => library.removeFromHistory(String(trackKey)));
 ipcMain.handle('history:clear', () => library.clearHistory());
 ipcMain.handle('playlists:list', () => library.listPlaylists());
 ipcMain.handle('playlists:get', (_e, id) => library.getPlaylist(String(id)));
@@ -190,6 +193,8 @@ ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('update:get', () => getUpdateState());
 ipcMain.handle('update:check', () => checkForUpdates());
 ipcMain.handle('update:install', () => installUpdate());
+ipcMain.on('update:setAuto', (_e, on) => setAutoCheck(on));
+ipcMain.handle('changelog:get', (_e, force) => getChangelog(!!force));
 
 // Logging from the page (fire and forget)
 ipcMain.on('log:write', (_e, level, source, message, data) => {

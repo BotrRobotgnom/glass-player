@@ -1,7 +1,7 @@
 {
   "name": "glass-player",
   "productName": "Glass Player",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Glass-style desktop player: YouTube Music and SoundCloud in one window",
   "type": "module",
   "main": "src/main/main.js",
@@ -34,6 +34,7 @@
     "files": [
       "src/**/*",
       "build/icon.png",
+      "CHANGELOG.md",
       "package.json"
     ],
     "publish": [

@@ -148,8 +148,10 @@
   const engineOf = (name) => (name === 'youtube' ? ytEngine : scEngine);
 
   // ---------- Lists ----------
-  // actions: [{ icon, title, onClick(button) }]; subText overrides the grey line under the title
-  function makeRow(track, { onPlay, actions = [], subText }) {
+  // actions: [{ icon, title, onClick(button) }] appear on hover left of the duration;
+  // remove: { title, onClick, icon? } is a red button that takes the place of the duration on hover;
+  // subText overrides the grey line under the title
+  function makeRow(track, { onPlay, actions = [], remove, subText }) {
     const row = document.createElement('div');
     row.dataset.key = track.source + ':' + track.id;
     row.className = 'row' + (isCurrent(track) ? ' current' : '') + (track.embeddable === false ? ' blocked' : '');
@@ -179,11 +181,6 @@
     meta.append(title, sub);
     row.appendChild(meta);
 
-    const dur = document.createElement('div');
-    dur.className = 'dur';
-    dur.textContent = track.durationSec ? fmt(track.durationSec) : '';
-    row.appendChild(dur);
-
     const acts = document.createElement('div');
     acts.className = 'acts';
     for (const a of actions) {
@@ -199,6 +196,27 @@
       acts.appendChild(btn);
     }
     row.appendChild(acts);
+
+    // the duration sits at the far right; the remove button replaces it while the row is hovered
+    const end = document.createElement('div');
+    end.className = 'end' + (remove ? ' has-del' : '');
+    const dur = document.createElement('div');
+    dur.className = 'dur';
+    dur.textContent = track.durationSec ? fmt(track.durationSec) : '';
+    end.appendChild(dur);
+    if (remove) {
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.type = 'button';
+      del.title = remove.title;
+      del.appendChild(icon(remove.icon || 'i-trash'));
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        remove.onClick();
+      });
+      end.appendChild(del);
+    }
+    row.appendChild(end);
 
     row.addEventListener('click', onPlay);
     return row;
@@ -263,10 +281,8 @@
     state.queue.forEach((track, i) => {
       const row = makeRow(track, {
         onPlay: () => playIndex(i),
-        actions: [
-          { icon: 'i-close', title: t('row.removeFromQueue'), onClick: () => removeFromQueue(i) },
-          playlistAction(track),
-        ],
+        actions: [playlistAction(track)],
+        remove: { icon: 'i-close', title: t('row.removeFromQueue'), onClick: () => removeFromQueue(i) },
       });
       if (i === state.index) row.classList.add('current');
       box.appendChild(row);
@@ -957,7 +973,13 @@
   const updText = $('#updateText');
   const updBtn = $('#btnUpdate');
   let updStatus = 'idle';
-  let notified = '';
+  const pageReady =
+    document.readyState === 'loading'
+      ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
+      : Promise.resolve();
+  let announced = '';
+  let manualChecking = false;
+  let lastUpdate = { status: 'idle' };
 
   function renderUpdate(s) {
     updStatus = s.status;
@@ -982,17 +1004,48 @@
     } else {
       updText.textContent = t('update.label');
     }
-    // one toast per discovered version
-    const key = s.status + ':' + (s.version || '');
-    if ((s.status === 'downloaded' || s.status === 'manual') && notified !== key) {
-      notified = key;
-      toast(t(s.status === 'downloaded' ? 'update.toastReady' : 'update.toastAvailable', { version: s.version }));
-    }
+    // A newly found version opens the "What's new" window once per run (unless the user skipped that version,
+    // and a manual check always shows it)
+    const available = ['downloading', 'downloaded', 'manual'].includes(s.status) && s.version;
+    const manual = manualChecking;
+    if (s.status !== 'checking') manualChecking = false;
+    lastUpdate = s;
+    // the changelog script loads after this one, so wait until every script has run
+    pageReady.then(() => {
+      if (available && announced !== s.version) {
+        announced = s.version;
+        if ((manual || store.get('skipVersion', '') !== s.version) && window.GP.openChangelog) {
+          window.GP.openChangelog({ reason: 'update' });
+        }
+      }
+      if (window.GP.onUpdate) window.GP.onUpdate(s);
+    });
   }
 
   updBtn.addEventListener('click', () => {
     if (updStatus === 'downloaded' || updStatus === 'manual') window.api.update.install();
-    else window.api.update.check();
+    else {
+      manualChecking = true;
+      window.api.update.check();
+    }
+  });
+  $('#btnChangelog').addEventListener('click', () => {
+    els.settings.classList.add('hidden');
+    window.GP.openChangelog({ reason: 'browse' });
+  });
+
+  // Automatic checks can be switched off (the manual Check button always works)
+  const autoUpdate = $('#autoUpdate');
+  autoUpdate.checked = store.get('autoUpdate', true);
+  window.api.update.setAuto(autoUpdate.checked);
+  autoUpdate.addEventListener('change', () => {
+    store.set('autoUpdate', autoUpdate.checked);
+    window.api.update.setAuto(autoUpdate.checked);
+    if (autoUpdate.checked) window.api.update.check();
+  });
+  Object.assign(window.GP, {
+    updateState: () => lastUpdate,
+    installUpdate: () => window.api.update.install(),
   });
   window.api.update.onState(renderUpdate);
   window.api.update.get().then(renderUpdate).catch(() => {});

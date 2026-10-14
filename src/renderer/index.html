@@ -106,8 +106,13 @@
       </div>
       <div class="update-row">
         <span id="updateText" class="update-text" data-i18n="update.label">Updates</span>
+        <button id="btnChangelog" class="swap" type="button" data-i18n="update.changelog">Changelog</button>
         <button id="btnUpdate" class="swap" type="button" data-i18n="update.check">Check</button>
       </div>
+      <label class="set-row check update-auto">
+        <input id="autoUpdate" type="checkbox" checked />
+        <span data-i18n="settings.autoUpdate">Check for updates automatically</span>
+      </label>
       <p id="appVersion" class="app-version"></p>
     </div>
 
@@ -165,6 +170,25 @@
       </div>
     </footer>
 
+    <div id="changelog" class="cl-scrim hidden">
+      <section class="cl card" role="dialog" aria-modal="true" aria-labelledby="clTitle">
+        <header class="cl-head">
+          <div>
+            <h2 id="clTitle" data-i18n="changelog.title">What's new</h2>
+            <p id="clSub" class="cl-sub"></p>
+          </div>
+          <button id="clX" class="wbtn" type="button" title="Close" data-i18n-title="win.close"><svg><use href="#i-close" /></svg></button>
+        </header>
+        <div id="clBody" class="cl-body"></div>
+        <footer class="cl-foot">
+          <span id="clNote" class="cl-note"></span>
+          <button id="clSkip" class="swap cl-skip hidden" type="button" data-i18n="changelog.skip">Skip this version</button>
+          <button id="clClose" class="swap" type="button" data-i18n="changelog.close">Close</button>
+          <button id="clUpdate" class="swap cl-update hidden" type="button"></button>
+        </footer>
+      </section>
+    </div>
+
     <div id="plMenu" class="pl-menu card hidden" role="menu"></div>
 
     <dialog id="plDialog" class="dialog card">
@@ -199,5 +223,6 @@
   <script src="engines.js"></script>
   <script src="app.js"></script>
   <script src="library.js"></script>
+  <script src="changelog.js"></script>
 </body>
 </html>

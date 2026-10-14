@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import electronUpdater from 'electron-updater';
 import * as logger from './logger.js';
+import { fetchPublishedReleases, compareVersions } from './releases.js';
 
 const { autoUpdater } = electronUpdater;
 
@@ -40,27 +41,12 @@ function readUpdateConfig() {
   }
 }
 
-const newer = (a, b) => {
-  const pa = String(a).replace(/^v/, '').split('.').map(Number);
-  const pb = String(b).replace(/^v/, '').split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
-  }
-  return false;
-};
-
-// Asks the GitHub API for the newest published (non-draft, non-prerelease) release.
-// Returns null when there is none. electron-updater's own lookup scrapes the releases page and fails
-// with a confusing "406" when nothing is published, so we ask the API first and only hand over to
-// electron-updater when a newer version really exists.
+// Newest published release (drafts, pre-releases and stray "untagged-…" releases are ignored).
+// electron-updater's own lookup scrapes the releases page and fails with a confusing "406" when nothing
+// is published, so we ask the API first and only hand over to electron-updater when a newer version exists.
 async function fetchLatestRelease(cfg) {
-  const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/releases/latest`, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'glass-player' },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`GitHub answered HTTP ${res.status}`);
-  return res.json();
+  const [latest] = await fetchPublishedReleases(cfg);
+  return latest || null;
 }
 
 // Long technical errors (headers, XML) are cut down to something that fits in the UI and the log
@@ -112,14 +98,14 @@ export async function checkForUpdates() {
       setState({ status: 'none', code: 'noReleases' });
       return;
     }
-    const latest = String(rel.tag_name).replace(/^v/, '');
+    const latest = rel.version;
     logger.info('update', `Latest published release: ${latest}, installed: ${app.getVersion()}`);
-    if (!newer(latest, app.getVersion())) {
+    if (compareVersions(latest, app.getVersion()) <= 0) {
       setState({ status: 'none' });
       return;
     }
     if (canAutoUpdate) await autoUpdater.checkForUpdates();
-    else setState({ status: 'manual', version: latest, manualUrl: rel.html_url });
+    else setState({ status: 'manual', version: latest, manualUrl: rel.url });
   } catch (err) {
     failWith(err, 'check');
   }
@@ -148,9 +134,18 @@ export function initUpdater(sendToRenderer) {
   autoUpdater.on('error', (err) => failWith(err, 'updater'));
 }
 
-// Quiet check shortly after start (built versions only), then every 6 hours
+// Quiet check shortly after start (built versions only), then every 6 hours. The user can switch it off.
+let autoCheck = true;
+export function setAutoCheck(on) {
+  autoCheck = !!on;
+  logger.info('update', `Automatic update check ${autoCheck ? 'on' : 'off'}`);
+}
+
 export function startAutoCheck() {
   if (!app.isPackaged) return;
-  setTimeout(() => checkForUpdates(), 8000);
-  setInterval(() => checkForUpdates(), 6 * 60 * 60 * 1000);
+  const run = () => {
+    if (autoCheck) checkForUpdates();
+  };
+  setTimeout(run, 8000);
+  setInterval(run, 6 * 60 * 60 * 1000);
 }

@@ -93,6 +93,13 @@
         onPlay: () => GP.playFrom(items.map((x) => x.track), it.track),
         subText: bits.filter(Boolean).join(' · '),
         actions: [queueAction(it.track), GP.playlistAction(it.track)],
+        remove: {
+          title: t('history.removeTrack'),
+          onClick: async () => {
+            await api.history.remove(it.track.source + ':' + it.track.id);
+            renderHistory();
+          },
+        },
       });
     });
 
@@ -308,7 +315,7 @@
         playPlaylist(await api.playlists.get(pl.id), false);
       });
       acts.appendChild(play);
-      row.append(coverNode(pl), meta, el('div', 'dur'), acts);
+      row.append(coverNode(pl), meta, acts, el('div', 'end'));
       row.addEventListener('click', () => {
         plView.id = pl.id;
         renderPlaylists();
@@ -373,17 +380,15 @@
     const rows = pl.tracks.map((track) =>
       GP.makeRow(track, {
         onPlay: () => GP.playFrom(pl.tracks, track),
-        actions: [
-          queueAction(track),
-          {
-            icon: 'i-close',
-            title: t('playlist.removeTrack'),
-            onClick: async () => {
-              await api.playlists.removeTrack(pl.id, track.source + ':' + track.id);
-              renderPlaylists();
-            },
+        actions: [queueAction(track)],
+        remove: {
+          icon: 'i-close',
+          title: t('playlist.removeTrack'),
+          onClick: async () => {
+            await api.playlists.removeTrack(pl.id, track.source + ':' + track.id);
+            renderPlaylists();
           },
-        ],
+        },
       }),
     );
     plBox.replaceChildren(back, head, ...(rows.length ? rows : [GP.emptyMessage(t('playlist.emptyTracks'))]));
