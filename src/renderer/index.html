@@ -64,56 +64,86 @@
       </div>
     </header>
 
-    <div id="settings" class="settings card hidden">
-      <label class="set-row" id="rowTransparency">
-        <span data-i18n="settings.transparency">Transparency</span>
-        <input id="transparency" type="range" min="0" max="60" value="30" />
-        <output id="transparencyVal">30%</output>
-      </label>
-      <label class="set-row">
-        <span data-i18n="settings.effect">Window effect</span>
-        <select id="effect"></select>
-      </label>
-      <p id="effectHint" class="hint hidden"></p>
-      <label class="set-row">
-        <span data-i18n="settings.theme">Theme</span>
-        <select id="theme">
-          <option value="silver" data-i18n="theme.silver">Silver</option>
-          <option value="graphite" data-i18n="theme.graphite">Graphite</option>
-        </select>
-      </label>
-      <label class="set-row check">
-        <input id="priorityYT" type="checkbox" checked />
-        <span data-i18n="settings.priority">YouTube priority: for SoundCloud tracks, look for the official version on YouTube Music</span>
-      </label>
-      <label class="set-row check">
-        <input id="autoVideo" type="checkbox" />
-        <span data-i18n="settings.autoVideo">Play the video automatically when a track has one</span>
-      </label>
-      <label class="set-row check">
-        <input id="devMode" type="checkbox" />
-        <span data-i18n="settings.devMode">Developer mode</span>
-      </label>
-      <div id="devOptions" class="dev-options hidden">
-        <label class="set-row check">
-          <input id="devDebugButton" type="checkbox" />
-          <span data-i18n="settings.debugButton">Show the debug button in the title bar</span>
-        </label>
-        <label class="set-row check">
-          <input id="devVerbose" type="checkbox" />
-          <span data-i18n="settings.verbose">Verbose logging (debug level)</span>
-        </label>
-      </div>
-      <div class="update-row">
-        <span id="updateText" class="update-text" data-i18n="update.label">Updates</span>
-        <button id="btnChangelog" class="swap" type="button" data-i18n="update.changelog">Changelog</button>
-        <button id="btnUpdate" class="swap" type="button" data-i18n="update.check">Check</button>
-      </div>
-      <label class="set-row check update-auto">
-        <input id="autoUpdate" type="checkbox" checked />
-        <span data-i18n="settings.autoUpdate">Check for updates automatically</span>
-      </label>
-      <p id="appVersion" class="app-version"></p>
+    <div id="settings" class="cl-scrim hidden">
+      <section class="st card" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+        <header class="cl-head">
+          <h2 id="stTitle" data-i18n="settings.title">Settings</h2>
+          <button id="stX" class="wbtn" type="button" title="Close" data-i18n-title="win.close"><svg><use href="#i-close" /></svg></button>
+        </header>
+        <div class="st-main">
+          <nav class="st-nav" aria-label="Settings sections">
+            <button type="button" class="on" data-page="general" data-i18n="settings.general">General</button>
+            <button type="button" data-page="appearance" data-i18n="settings.appearance">Appearance</button>
+            <button type="button" data-page="updates" data-i18n="settings.updates">Updates</button>
+            <button type="button" data-page="developer" data-i18n="settings.developer">Developer</button>
+          </nav>
+          <div class="st-pages">
+            <div class="st-page" data-page="general">
+              <label class="st-row">
+                <span class="st-text"><b data-i18n="settings.priority">YouTube priority</b><small data-i18n="settings.priorityHint">For SoundCloud tracks, look for the official version on YouTube Music</small></span>
+                <input id="priorityYT" class="switch" type="checkbox" checked />
+              </label>
+              <label class="st-row">
+                <span class="st-text"><b data-i18n="settings.autoVideo">Play video automatically</b><small data-i18n="settings.autoVideoHint">Show the video when a track has one. Otherwise only a play button appears on the cover</small></span>
+                <input id="autoVideo" class="switch" type="checkbox" />
+              </label>
+            </div>
+
+            <div class="st-page hidden" data-page="appearance">
+              <div class="st-row">
+                <span class="st-text"><b data-i18n="settings.theme">Theme</b></span>
+                <select id="theme">
+                  <option value="silver" data-i18n="theme.silver">Silver</option>
+                  <option value="graphite" data-i18n="theme.graphite">Graphite</option>
+                </select>
+              </div>
+              <div class="st-row">
+                <span class="st-text"><b data-i18n="settings.effect">Window effect</b><small id="effectHint" class="hidden"></small></span>
+                <select id="effect"></select>
+              </div>
+              <div class="st-row" id="rowTransparency">
+                <span class="st-text"><b data-i18n="settings.transparency">Transparency</b></span>
+                <span class="st-slider"><input id="transparency" type="range" min="0" max="60" value="30" /><output id="transparencyVal">30%</output></span>
+              </div>
+            </div>
+
+            <div class="st-page hidden" data-page="updates">
+              <div class="st-row">
+                <span class="st-text"><b data-i18n="settings.updates">Updates</b><small id="updateText" class="update-text"></small></span>
+                <span class="st-btns">
+                  <button id="btnChangelog" class="swap" type="button" data-i18n="update.changelog">Changelog</button>
+                  <button id="btnUpdate" class="swap" type="button" data-i18n="update.check">Check</button>
+                </span>
+              </div>
+              <label class="st-row">
+                <span class="st-text"><b data-i18n="settings.autoUpdate">Check automatically</b><small data-i18n="settings.autoUpdateHint">Look for a new version when the app starts and every few hours</small></span>
+                <input id="autoUpdate" class="switch" type="checkbox" checked />
+              </label>
+            </div>
+
+            <div class="st-page hidden" data-page="developer">
+              <label class="st-row">
+                <span class="st-text"><b data-i18n="settings.devMode">Developer mode</b><small data-i18n="settings.devModeHint">Extra tools for troubleshooting</small></span>
+                <input id="devMode" class="switch" type="checkbox" />
+              </label>
+              <div id="devOptions" class="dev-options hidden">
+                <label class="st-row">
+                  <span class="st-text"><b data-i18n="settings.debugButtonTitle">Debug button</b><small data-i18n="settings.debugButton">Show the debug log button in the title bar</small></span>
+                  <input id="devDebugButton" class="switch" type="checkbox" />
+                </label>
+                <label class="st-row">
+                  <span class="st-text"><b data-i18n="settings.verboseTitle">Verbose logging</b><small data-i18n="settings.verbose">Also record debug-level messages</small></span>
+                  <input id="devVerbose" class="switch" type="checkbox" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="cl-foot">
+          <span id="appVersion" class="cl-note"></span>
+          <button id="stClose" class="swap" type="button" data-i18n="changelog.close">Close</button>
+        </footer>
+      </section>
     </div>
 
     <main class="main">
@@ -166,7 +196,7 @@
       </div>
       <div class="volume">
         <button id="btnMute" class="tbtn" type="button" title="Volume" data-i18n-title="transport.volume"><svg><use href="#i-volume" /></svg></button>
-        <input id="volume" type="range" min="0" max="100" value="80" />
+        <div class="volume-pop"><input id="volume" type="range" min="0" max="100" value="80" aria-label="Volume" /></div>
       </div>
     </footer>
 

@@ -184,6 +184,7 @@ const summary = (pl) => ({
   id: pl.id,
   name: pl.name,
   count: pl.tracks.length,
+  duration: pl.tracks.reduce((sum, t) => sum + (t.durationSec || 0), 0),
   updated: pl.updated,
   cover: readCover(pl),
   covers: pl.tracks.slice(0, 4).map((t) => t.cover).filter(Boolean), // fallback mosaic when there is no own cover

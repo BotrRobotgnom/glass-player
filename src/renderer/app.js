@@ -317,10 +317,22 @@
   }
 
   function removeFromQueue(i) {
+    const wasPlaying = i === state.index;
     state.queue.splice(i, 1);
     if (i < state.index) state.index--;
-    else if (i === state.index) state.index = -1;
     renderQueue();
+    if (!wasPlaying) return;
+    // The track that is playing was removed: stop it and move on to the one that took its place
+    log('info', 'The playing track was removed from the queue');
+    if (i < state.queue.length) playIndex(i);
+    else if (state.repeat === 'all' && state.queue.length) playIndex(0);
+    else {
+      ytEngine.pause();
+      scEngine.pause();
+      state.index = -1;
+      state.playing = false;
+      updatePlayButton();
+    }
   }
 
   // Play `track` and make `tracks` the queue (used by results, history and playlists)
@@ -932,12 +944,25 @@
     store.set('priorityYT', state.priorityYT);
   });
 
-  $('#btnSettings').addEventListener('click', (e) => {
-    e.stopPropagation();
-    els.settings.classList.toggle('hidden');
+  // The settings window: sections on the left, the chosen one on the right
+  const openSettings = (page) => {
+    if (page) showSettingsPage(page);
+    els.settings.classList.remove('hidden');
+  };
+  const closeSettings = () => els.settings.classList.add('hidden');
+  function showSettingsPage(page) {
+    $$('.st-nav button').forEach((b) => b.classList.toggle('on', b.dataset.page === page));
+    $$('.st-page').forEach((p) => p.classList.toggle('hidden', p.dataset.page !== page));
+  }
+  $$('.st-nav button').forEach((b) => b.addEventListener('click', () => showSettingsPage(b.dataset.page)));
+  $('#btnSettings').addEventListener('click', () => (els.settings.classList.contains('hidden') ? openSettings() : closeSettings()));
+  $('#stX').addEventListener('click', closeSettings);
+  $('#stClose').addEventListener('click', closeSettings);
+  els.settings.addEventListener('mousedown', (e) => {
+    if (e.target === els.settings) closeSettings();
   });
-  document.addEventListener('click', (e) => {
-    if (!els.settings.contains(e.target)) els.settings.classList.add('hidden');
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !els.settings.classList.contains('hidden') && $('#changelog').classList.contains('hidden')) closeSettings();
   });
 
   // ---------- Developer mode ----------
@@ -1002,7 +1027,7 @@
     } else if (s.status === 'error') {
       updText.textContent = s.code ? t('update.code.' + s.code) : t('update.failed', { message: s.message || 'error' });
     } else {
-      updText.textContent = t('update.label');
+      updText.textContent = t('update.idle');
     }
     // A newly found version opens the "What's new" window once per run (unless the user skipped that version,
     // and a manual check always shows it)

@@ -45,6 +45,14 @@
     });
   }
 
+  // 3 min, 1 h 5 min; empty for an empty playlist
+  function totalTime(sec, count) {
+    if (!count) return '';
+    const min = Math.round((sec || 0) / 60);
+    if (min < 1) return t('time.lessThanMin');
+    return min >= 60 ? t('time.hoursMin', { h: Math.floor(min / 60), m: min % 60 }) : t('time.min', { m: min });
+  }
+
   const queueAction = (track) => ({ icon: 'i-plus', title: t('row.addToQueue'), onClick: () => GP.addToQueue(track) });
 
   // ---------- History ----------
@@ -302,20 +310,31 @@
     bar.appendChild(add);
 
     const rows = lists.map((pl) => {
-      const row = el('div', 'row');
+      const row = el('div', 'row pl-row');
       const meta = el('div', 'meta');
       meta.append(el('div', 'title', pl.name), el('div', 'sub', plural('playlist.tracks', pl.count)));
-      const acts = el('div', 'acts');
-      const play = el('button', 'act');
-      play.type = 'button';
-      play.title = t('playlist.play');
-      play.appendChild(GP.icon('i-play'));
-      play.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        playPlaylist(await api.playlists.get(pl.id), false);
+      // buttons appear only while the row is hovered; the total time stays at the right
+      const acts = el('div', 'pl-acts');
+      const act = (icon, label, onClick, primary) => {
+        const b = el('button', 'swap' + (primary ? ' primary' : ''));
+        b.type = 'button';
+        b.append(GP.icon(icon), el('span', '', label));
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onClick();
+        });
+        return b;
+      };
+      const has = pl.count > 0;
+      const playBtn = act('i-play', t('playlist.play'), async () => playPlaylist(await api.playlists.get(pl.id), false), true);
+      const shuffleBtn = act('i-shuffle', t('playlist.shuffle'), async () => playPlaylist(await api.playlists.get(pl.id), true));
+      playBtn.disabled = shuffleBtn.disabled = !has;
+      const editBtn = act('i-edit', t('playlist.editShort'), async () => {
+        const full = await api.playlists.get(pl.id);
+        if (full && (await openPlaylistDialog(full))) renderPlaylists();
       });
-      acts.appendChild(play);
-      row.append(coverNode(pl), meta, acts, el('div', 'end'));
+      acts.append(playBtn, shuffleBtn, editBtn);
+      row.append(coverNode(pl), meta, el('div', 'end', totalTime(pl.duration, pl.count)), acts);
       row.addEventListener('click', () => {
         plView.id = pl.id;
         renderPlaylists();
@@ -341,7 +360,6 @@
       renderPlaylists();
     });
 
-    const mins = Math.round(pl.tracks.reduce((s, x) => s + (x.durationSec || 0), 0) / 60);
     const info = el('div', 'info');
     const btns = el('div', 'btns');
     const button = (icon, label, onClick, cls = 'swap') => {
@@ -355,13 +373,12 @@
     const playBtn = button('i-play', t('playlist.play'), () => playPlaylist(pl, false), 'swap primary');
     const shuffleBtn = button('i-shuffle', t('playlist.shuffle'), () => playPlaylist(pl, true));
     playBtn.disabled = shuffleBtn.disabled = !hasTracks;
-    const editBtn = button('i-edit', t('playlist.edit'), async () => {
+    const editBtn = button('i-edit', t('playlist.editShort'), async () => {
       const saved = await openPlaylistDialog(pl);
       if (saved) renderPlaylists();
     });
-    editBtn.title = t('playlist.edit');
-    const delBtn = button('i-trash', '', null, 'swap danger');
-    delBtn.title = t('playlist.delete');
+    // deleting a playlist is only possible from inside it, and needs a second click
+    const delBtn = button('i-trash', t('playlist.deleteShort'), null, 'swap');
     confirmClick(delBtn, t('common.confirm'), async () => {
       await api.playlists.remove(pl.id);
       GP.toast(t('playlist.deleted'));
@@ -369,13 +386,9 @@
       renderPlaylists();
     });
     btns.append(playBtn, shuffleBtn, editBtn, delBtn);
-    info.append(
-      el('h3', '', pl.name),
-      el('p', '', plural('playlist.tracks', pl.tracks.length) + (mins ? ` · ${mins} min` : '')),
-      btns,
-    );
+    info.append(el('h3', '', pl.name), el('p', '', plural('playlist.tracks', pl.tracks.length)), btns);
     const head = el('div', 'pl-head');
-    head.append(coverNode(pl, 'head'), info);
+    head.append(coverNode(pl, 'head'), info, el('div', 'pl-total', totalTime(pl.duration, pl.tracks.length)));
 
     const rows = pl.tracks.map((track) =>
       GP.makeRow(track, {

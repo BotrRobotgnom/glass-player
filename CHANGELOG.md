@@ -4,6 +4,21 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.1.2
+
+### Added
+- Settings is now a full window with sections: General, Appearance, Updates and Developer. Switches sit on the right, labels on the left.
+- In narrow windows the volume control collapses to the speaker icon; hover it to get a vertical slider over the player.
+- Playlists show their total time at the right of each row and in the header.
+- Playlist rows show Play, Shuffle and Edit buttons while hovered.
+
+### Changed
+- Deleting a playlist is only possible from inside it, with a plain "Delete" button (click twice to confirm).
+
+### Fixed
+- Removing the track that is playing from the queue now stops it and starts the next one.
+- The trash icon in the playlist header is centred.
+
 ## 0.1.1
 
 ### Added
