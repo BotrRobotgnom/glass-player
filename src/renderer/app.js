@@ -523,12 +523,29 @@
   }
 
   // ---------- UI updates ----------
+  // The big cover asks for a larger picture than the list thumbnails; if that size does not exist, use the original
+  function hiresCover(url) {
+    if (!url) return '';
+    // YouTube Music art (googleusercontent): ...=w60-h60-l90-rj  ->  ...=w720-h720-l90-rj
+    if (/^https:\/\/(lh3\.googleusercontent\.com|yt3\.(ggpht|googleusercontent)\.com)\//.test(url)) {
+      return url.replace(/=(?:[ws]\d+)[^?]*$/, '=w720-h720-l90-rj');
+    }
+    // SoundCloud: ...-large.jpg (100px) -> -t500x500.jpg
+    if (/sndcdn\.com\//.test(url)) return url.replace(/-(large|t\d+x\d+|crop|small)\./, '-t500x500.');
+    return url;
+  }
+  function setCover(url) {
+    const big = hiresCover(url);
+    els.cover.onerror = big !== url ? () => { els.cover.onerror = null; els.cover.src = url; } : null;
+    els.cover.src = big;
+  }
+
   function renderNow(n) {
     const track = n.shown;
     els.npTitle.textContent = track.title || t('np.untitled');
     els.npArtist.textContent = [track.artist, track.album].filter(Boolean).join(' · ');
     els.stage.dataset.source = track.source;
-    els.cover.src = track.cover || '';
+    setCover(track.cover);
 
     // Video stays hidden unless the user asks for it (or the setting says to show it) and the track has one
     const key = track.source + ':' + track.id;
@@ -723,6 +740,11 @@
   $('#qClear').addEventListener('click', () => {
     els.q.value = '';
     els.q.dispatchEvent(new Event('input'));
+    // the results belonged to the text that was just erased
+    searchId++;
+    lastQuery = '';
+    state.results = { youtube: [], soundcloud: [] };
+    renderResults();
     els.q.focus();
   });
   els.q.addEventListener('input', syncClear);
@@ -797,6 +819,7 @@
   els.btnRepeat.addEventListener('click', () => {
     state.repeat = state.repeat === 'off' ? 'all' : state.repeat === 'all' ? 'one' : 'off';
     els.btnRepeat.classList.toggle('on', state.repeat !== 'off');
+    els.btnRepeat.dataset.mode = state.repeat;
     els.btnRepeat.title = t('transport.repeat.' + state.repeat);
   });
 

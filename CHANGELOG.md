@@ -4,6 +4,16 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.1.4
+
+### Changed
+- The clear (x) button in the search field also clears the results list.
+
+### Fixed
+- The big cover in the now-playing block is loaded in a higher resolution (YouTube Music and SoundCloud), so it is no longer blurry.
+- A scrollbar no longer appears in the now-playing block: the square cover fits the available height.
+- "Repeat all" and "Repeat one" looked the same; "Repeat one" now shows a "1" on the icon.
+
 ## 0.1.3
 
 ### Added

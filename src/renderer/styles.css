@@ -393,10 +393,10 @@ select option::checkmark { color: var(--accent); }
 .badge.official { color: #1f9d55; border-color: rgba(31, 157, 85, 0.5); }
 
 /* ---------- Now playing ---------- */
-.now { display: flex; flex-direction: column; padding: 14px; gap: 14px; min-height: 0; overflow-y: auto; }
+.now { display: flex; flex-direction: column; padding: 14px; gap: 14px; min-height: 0; overflow-y: auto; container-type: size; }
 
 .stage {
-  position: relative; width: 100%; max-width: min(100%, 55vh); margin-inline: auto; aspect-ratio: 1 / 1; flex: none;
+  position: relative; width: 100%; max-width: min(100%, max(160px, calc(100cqh - 200px))); margin-inline: auto; aspect-ratio: 1 / 1; flex: none;
   transition: aspect-ratio 0.35s ease, max-width 0.35s ease;
   border-radius: 12px; overflow: hidden;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.35), rgba(120, 130, 150, 0.35));
@@ -453,6 +453,11 @@ select option::checkmark { color: var(--accent); }
 }
 .tbtn:hover { background: var(--row-hover); color: var(--text); }
 .tbtn.on { color: var(--accent); }
+.tbtn { position: relative; }
+/* repeat one: the same icon with a "1" in the middle */
+.tbtn[data-mode='one']::after {
+  content: '1'; position: absolute; left: 50%; top: 50%; translate: -50% -50%; font-size: 9px; font-weight: 800; line-height: 1; color: currentColor;
+}
 .tbtn.big {
   width: 46px; height: 46px; color: #fff;
   background: linear-gradient(180deg, #5b8cff, var(--accent));
