@@ -4,6 +4,13 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.1.5
+
+### Added
+- A tray icon. Its tooltip shows the current track and time; its menu has the track, Previous / Play-Pause / Next, Show or Hide the window, and Quit. Clicking the icon shows or hides the window.
+- A setting "Keep running in the tray": when on, the window's close button hides the window to the tray instead of quitting.
+- Only one copy of the app runs at a time: starting it again brings the existing window back.
+
 ## 0.1.4
 
 ### Changed

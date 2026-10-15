@@ -11,6 +11,7 @@ import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpda
 import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
 import * as library from './library.js';
+import * as trayIcon from './tray.js';
 import { registerDebugIpc, openDebugWindow, closeDebugWindow } from './debugWindow.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -160,7 +161,23 @@ async function createWindow() {
   });
   win.on('focus', () => logger.debug('window', 'Focus gained'));
   win.on('blur', () => logger.debug('window', 'Focus lost'));
-  win.on('close', () => closeDebugWindow());
+  win.on('close', (e) => {
+    // with "keep in the tray" on, the close button only hides the window
+    if (trayIcon.shouldHideOnClose()) {
+      e.preventDefault();
+      win.hide();
+      logger.info('window', 'Window hidden to the tray');
+      return;
+    }
+    closeDebugWindow();
+  });
+  win.on('show', () => trayIcon.refresh());
+  win.on('hide', () => trayIcon.refresh());
+
+  trayIcon.createTray({
+    window: () => win,
+    onCommand: (cmd) => win && !win.isDestroyed() && win.webContents.send('player:command', cmd),
+  });
 
   await win.loadURL(origin);
 
@@ -210,10 +227,14 @@ ipcMain.handle('win:toggleMaximize', () => {
   win.isMaximized() ? win.unmaximize() : win.maximize();
 });
 ipcMain.handle('win:close', () => win?.close());
+ipcMain.on('tray:setCloseToTray', (_e, on) => trayIcon.setCloseToTray(on));
+ipcMain.on('tray:labels', (_e, labels) => trayIcon.setLabels(labels));
+ipcMain.on('player:state', (_e, info) => trayIcon.setNowPlaying(info));
 ipcMain.handle('win:alwaysOnTop', (_e, on) => win?.setAlwaysOnTop(!!on));
 ipcMain.handle('win:getInfo', async () => ({
   ...effectInfo,
   platform: process.platform,
+  trayAvailable: trayIcon.isTrayAvailable(),
   transparencyEnabled: await readTransparencyEnabled(),
 }));
 ipcMain.handle('win:setEffect', (_e, effect) => {
@@ -320,9 +341,18 @@ ipcMain.handle('findOfficial', async (_e, track) => {
   }
 });
 
-app.whenReady().then(createWindow);
+// One instance only: a second launch brings the first one back (it may be sitting in the tray)
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => trayIcon.showWindow());
+  app.whenReady().then(createWindow);
+}
 
-app.on('before-quit', () => library.flushLibrary());
+app.on('before-quit', () => {
+  trayIcon.markQuitting();
+  library.flushLibrary();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

@@ -37,6 +37,15 @@ contextBridge.exposeInMainWorld('api', {
   debug: {
     open: () => ipcRenderer.invoke('debug:open'),
   },
+  player: {
+    // current track for the tray (title, artist, position, ...)
+    report: (info) => ipcRenderer.send('player:state', info),
+    onCommand: (cb) => ipcRenderer.on('player:command', (_e, cmd) => cb(cmd)),
+  },
+  tray: {
+    setCloseToTray: (on) => ipcRenderer.send('tray:setCloseToTray', !!on),
+    setLabels: (labels) => ipcRenderer.send('tray:labels', labels),
+  },
   win: {
     minimize: () => ipcRenderer.invoke('win:minimize'),
     toggleMaximize: () => ipcRenderer.invoke('win:toggleMaximize'),

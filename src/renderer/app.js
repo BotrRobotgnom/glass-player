@@ -948,6 +948,7 @@
       }),
     );
     windowInfo = info;
+    $('#rowTray').classList.toggle('hidden', info.trayAvailable === false);
     const saved = store.get('effect', info.defaultEffect);
     await chooseEffect(info.effects.includes(saved) ? saved : info.defaultEffect, false);
   }
@@ -965,6 +966,34 @@
     root.dataset.theme = theme.value;
     store.set('theme', theme.value);
   });
+
+  // Tray: what closing the window does, the labels of the tray menu, and the track info it shows
+  const closeToTray = $('#closeToTray');
+  closeToTray.checked = store.get('closeToTray', false);
+  window.api.tray.setCloseToTray(closeToTray.checked);
+  closeToTray.addEventListener('change', () => {
+    store.set('closeToTray', closeToTray.checked);
+    window.api.tray.setCloseToTray(closeToTray.checked);
+  });
+  window.api.tray.setLabels(Object.fromEntries(['show', 'hide', 'quit', 'prev', 'next', 'play', 'pause', 'nothing'].map((k) => [k, t('tray.' + k)])));
+  window.api.player.onCommand((cmd) => {
+    if (cmd === 'prev') prev();
+    else if (cmd === 'next') next(false);
+    else if (cmd === 'toggle') togglePlay();
+  });
+  const reportToTray = () => {
+    const n = state.now;
+    window.api.player.report({
+      hasTrack: !!n,
+      title: n ? n.shown.title : '',
+      artist: n ? n.shown.artist : '',
+      cur: state.cur,
+      dur: state.dur,
+      playing: state.playing,
+    });
+  };
+  setInterval(reportToTray, 1000);
+  reportToTray();
 
   const autoVideo = $('#autoVideo');
   autoVideo.checked = store.get('autoVideo', false);
