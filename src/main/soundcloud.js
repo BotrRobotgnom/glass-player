@@ -77,6 +77,18 @@ export async function searchSoundCloud(query, limit = 20) {
   return (data.collection || []).map(toTrack).filter(Boolean);
 }
 
+// Tracks SoundCloud itself lists as similar to one track
+export async function relatedSoundCloud(trackId, limit = 25) {
+  const data = await api(`/tracks/${encodeURIComponent(trackId)}/related`, { limit: String(limit) });
+  return (data.collection || []).map(toTrack).filter(Boolean);
+}
+
+// SoundCloud's trending chart: the closest thing to a home page that works without signing in
+export async function trendingSoundCloud(limit = 20) {
+  const data = await api('/charts', { kind: 'trending', genre: 'soundcloud:genres:all-music', limit: String(limit) });
+  return (data.collection || []).map((c) => toTrack(c.track || c)).filter(Boolean);
+}
+
 export function isSoundCloudUrl(input) {
   try {
     const u = new URL(String(input).trim());

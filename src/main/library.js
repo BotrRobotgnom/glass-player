@@ -137,6 +137,11 @@ export function getHistory(view = 'recent', limit = 200) {
   return list;
 }
 
+// Every track ever counted as listened (for "do not recommend what they already know")
+export function heardKeys() {
+  return new Set(Object.keys(historyStore.load().tracks));
+}
+
 export function getHistoryStats() {
   const h = historyStore.load();
   return { tracks: Object.keys(h.tracks).length, plays: h.log.length };

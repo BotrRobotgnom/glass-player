@@ -74,6 +74,52 @@ export async function suggestYouTube(query) {
   return out.slice(0, 8);
 }
 
+// A track from an "up next" panel (a different node type than search results)
+function panelTrack(item) {
+  const v = item?.primary ?? item; // wrappers hold the song as `primary`
+  const id = v?.video_id;
+  if (!id) return null;
+  const artists = (v.artists || []).map((a) => a.name).filter(Boolean).join(', ');
+  return {
+    id,
+    source: 'youtube',
+    title: v.title?.toString?.() || '',
+    artist: artists || String(v.author || '').replace(/ - Topic$/, ''),
+    album: v.album?.name || '',
+    durationSec: v.duration?.seconds || 0,
+    cover: bestThumb(v.thumbnail),
+    url: `https://music.youtube.com/watch?v=${id}`,
+    hasVideo: !v.album?.name, // art tracks (songs) belong to an album; clips usually do not
+  };
+}
+
+// YouTube Music's own "what plays next" list for a track: our source of similar tracks
+export async function getRelatedYouTube(videoId, limit = 25) {
+  const yt = await getYT();
+  const panel = await yt.music.getUpNext(videoId);
+  return [...(panel?.contents || [])]
+    .map(panelTrack)
+    .filter((t) => t && t.id !== videoId)
+    .slice(0, limit);
+}
+
+// The (not personalised, because we are not signed in) YouTube Music home page: shelves of songs
+export async function getHomeYouTube(maxShelves = 3) {
+  const yt = await getYT();
+  const feed = await yt.music.getHomeFeed();
+  const out = [];
+  for (const shelf of feed?.sections || []) {
+    const title = shelf?.header?.title?.toString?.() || '';
+    const tracks = [...(shelf?.contents || [])]
+      .filter((i) => i && (i.item_type === 'song' || i.item_type === 'video'))
+      .map(toTrack)
+      .filter(Boolean);
+    if (title && tracks.length >= 3) out.push({ title, tracks });
+    if (out.length >= maxShelves) break;
+  }
+  return out;
+}
+
 export function extractVideoId(input) {
   const s = String(input).trim();
   if (/^[\w-]{11}$/.test(s)) return s;

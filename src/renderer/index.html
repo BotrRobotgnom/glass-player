@@ -36,6 +36,7 @@
     <symbol id="i-trash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/></g></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></symbol>
     <symbol id="i-swap" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></symbol>
   </svg>
 
@@ -154,12 +155,14 @@
     <main class="main">
       <section class="library card">
         <div class="tabs">
-          <button class="tab active" data-tab="results" type="button" data-i18n="tabs.results">Results</button>
+          <button class="tab active" data-tab="home" type="button" data-i18n="tabs.home">Home</button>
+          <button class="tab" data-tab="results" type="button" data-i18n="tabs.results">Results</button>
           <button class="tab" data-tab="queue" type="button"><span data-i18n="tabs.queue">Queue</span> <span id="queueCount" class="count"></span></button>
           <button class="tab" data-tab="playlists" type="button" data-i18n="tabs.playlists">Playlists</button>
           <button class="tab" data-tab="history" type="button" data-i18n="tabs.history">History</button>
         </div>
-        <div id="results" class="list"></div>
+        <div id="home" class="list"></div>
+        <div id="results" class="list hidden"></div>
         <div id="queue" class="list hidden"></div>
         <div id="playlists" class="list hidden"></div>
         <div id="history" class="list hidden"></div>
@@ -259,5 +262,6 @@
   <script src="app.js"></script>
   <script src="library.js"></script>
   <script src="changelog.js"></script>
+  <script src="home.js"></script>
 </body>
 </html>

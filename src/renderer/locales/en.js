@@ -68,6 +68,16 @@ window.__locales.en = {
   'effect.hint.noTransparency':
     "Windows 'Transparency effects' are off (Settings > Personalization > Colors), so the blur shows as a flat colour.",
 
+  'tabs.home': 'Home',
+  'home.refresh': 'Refresh',
+  'home.loading': 'Finding music you might like…',
+  'home.empty': 'Nothing to suggest yet. Play a few tracks and suggestions based on them will appear here.',
+  'home.failed': 'Could not load suggestions. Check your connection and try again.',
+  'home.noHistory': 'Suggestions get better the more you listen: they are built from your history on this computer.',
+  'home.mixYouTube': 'For you · YouTube Music',
+  'home.mixSoundCloud': 'For you · SoundCloud',
+  'home.because': 'Because you listened to {title}',
+  'home.trending': 'Trending on SoundCloud',
   'tabs.results': 'Results',
   'tabs.queue': 'Queue',
   'tabs.playlists': 'Playlists',

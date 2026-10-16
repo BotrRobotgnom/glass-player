@@ -11,6 +11,7 @@ import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpda
 import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
 import * as library from './library.js';
+import { getHome } from './recommend.js';
 import * as trayIcon from './tray.js';
 import { registerDebugIpc, openDebugWindow, closeDebugWindow } from './debugWindow.js';
 
@@ -190,6 +191,9 @@ async function createWindow() {
 // ---------- IPC ----------
 
 registerDebugIpc();
+
+// Home: recommendations built from the listening history
+ipcMain.handle('recommend:get', (_e, force) => getHome(!!force));
 
 // Library: history and playlists
 ipcMain.handle('history:record', (_e, track, seconds) => library.recordPlay(track, seconds));

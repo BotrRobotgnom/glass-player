@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld('api', {
     remove: (trackKey) => ipcRenderer.invoke('history:remove', trackKey),
     clear: () => ipcRenderer.invoke('history:clear'),
   },
+  recommend: {
+    get: (force) => ipcRenderer.invoke('recommend:get', !!force),
+  },
   playlists: {
     list: () => ipcRenderer.invoke('playlists:list'),
     get: (id) => ipcRenderer.invoke('playlists:get', id),

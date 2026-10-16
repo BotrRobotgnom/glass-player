@@ -660,7 +660,7 @@
 
   function showTab(name) {
     $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-    for (const panel of ['results', 'queue', 'history', 'playlists']) $('#' + panel).classList.toggle('hidden', name !== panel);
+    for (const panel of ['home', 'results', 'queue', 'history', 'playlists']) $('#' + panel).classList.toggle('hidden', name !== panel);
     if (window.GP && window.GP.onTab) window.GP.onTab(name);
   }
 

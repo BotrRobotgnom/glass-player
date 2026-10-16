@@ -4,6 +4,14 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.0
+
+### Added
+- A Home tab (the first one) with recommendations built from your listening history on this computer: "For you" lists for YouTube Music and SoundCloud, and "Because you listened to ..." for your most played tracks. Tracks you already know and videos that cannot be played here are left out.
+- YouTube suggestions come from YouTube Music's own "up next" lists for your tracks; SoundCloud suggestions from SoundCloud's related tracks.
+- A "Trending on SoundCloud" list. With little history, shelves from the YouTube Music home page are shown too.
+- A Refresh button on Home. Suggestions are cached for 30 minutes.
+
 ## 0.1.5
 
 ### Added
