@@ -58,6 +58,7 @@
     shuffle: false,
     sources: store.get('sources', { youtube: true, soundcloud: true }),
     priorityYT: store.get('priorityYT', true),
+    autoSimilar: store.get('autoSimilar', true),
     volume: store.get('volume', 80),
     muted: false,
     cur: 0,
@@ -494,6 +495,36 @@
     next(true);
   }
 
+  // Asks for tracks similar to the one that just played, appends them and plays on. Repeats at every end of the queue.
+  let similarBusy = false;
+  async function continueWithSimilar() {
+    if (similarBusy) return;
+    similarBusy = true;
+    const token = state.token;
+    const seed = state.now.shown;
+    setStatus(t('np.findingSimilar'));
+    let found = [];
+    try {
+      found = await window.api.recommend.similar(seed, state.queue.map((x) => x.source + ':' + x.id));
+    } catch (err) {
+      log('warn', 'Similar tracks failed', { error: String(err.message || err) });
+    }
+    similarBusy = false;
+    if (token !== state.token) return; // the user started something else meanwhile
+    setStatus('');
+    if (!found.length) {
+      toast(t('np.noSimilar'));
+      state.playing = false;
+      updatePlayButton();
+      return;
+    }
+    const first = state.queue.length;
+    state.queue.push(...found);
+    log('info', `Queue ended: added ${found.length} similar track(s)`, { after: seed.title });
+    renderQueue();
+    playIndex(first);
+  }
+
   function next(auto = false) {
     const q = state.queue;
     if (!q.length) return;
@@ -511,6 +542,11 @@
     } else {
       i = state.index + 1;
       if (i >= q.length) {
+        // the queue has ended: keep going with similar tracks (unless "repeat all" is on)
+        if (state.repeat !== 'all' && state.autoSimilar && state.now && state.index === q.length - 1) {
+          continueWithSimilar();
+          return;
+        }
         if (state.repeat === 'all' || !auto) i = 0;
         else {
           state.playing = false;
@@ -1026,6 +1062,13 @@
   autostart.addEventListener('change', async () => {
     const s = await window.api.autostart.set(autostart.checked);
     autostart.checked = s.enabled; // show what really happened
+  });
+
+  const autoSimilar = $('#autoSimilar');
+  autoSimilar.checked = state.autoSimilar;
+  autoSimilar.addEventListener('change', () => {
+    state.autoSimilar = autoSimilar.checked;
+    store.set('autoSimilar', state.autoSimilar);
   });
 
   const autoVideo = $('#autoVideo');

@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   recommend: {
     get: (force) => ipcRenderer.invoke('recommend:get', !!force),
+    similar: (track, exclude) => ipcRenderer.invoke('recommend:similar', track, exclude),
   },
   playlists: {
     list: () => ipcRenderer.invoke('playlists:list'),

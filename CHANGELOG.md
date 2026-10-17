@@ -4,6 +4,11 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.4
+
+### Added
+- When the queue ends, similar tracks are added and playback goes on, and again at every end of the queue (YouTube Music "up next" for YouTube tracks, SoundCloud related tracks for SoundCloud ones). Nothing already in the queue is repeated. Turn it off in Settings > General: "Keep playing similar tracks". With "repeat all" on, the queue loops as before.
+
 ## 0.2.3
 
 ### Added

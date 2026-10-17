@@ -11,7 +11,7 @@ import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpda
 import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
 import * as library from './library.js';
-import { getHome } from './recommend.js';
+import { getHome, getSimilar } from './recommend.js';
 import * as autostart from './autostart.js';
 import * as trayIcon from './tray.js';
 import { registerDebugIpc, openDebugWindow, closeDebugWindow } from './debugWindow.js';
@@ -201,6 +201,12 @@ async function createWindow() {
 registerDebugIpc();
 
 // Home: recommendations built from the listening history
+ipcMain.handle('recommend:similar', (_e, track, exclude) =>
+  getSimilar(track, Array.isArray(exclude) ? exclude : []).catch((err) => {
+    logger.warn('recommend', 'Similar tracks failed', { error: String(err.message || err) });
+    return [];
+  }),
+);
 ipcMain.handle('recommend:get', (_e, force) => getHome(!!force));
 
 // Library: history and playlists

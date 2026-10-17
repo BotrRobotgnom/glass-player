@@ -127,3 +127,15 @@ export async function getHome(force = false) {
     });
   return inflight;
 }
+
+// Endless playback: tracks similar to the one that just ended, without anything already in the queue
+export async function getSimilar(track, exclude = []) {
+  if (!track || !track.id || (track.source !== 'youtube' && track.source !== 'soundcloud')) return [];
+  const skip = new Set([...exclude].map(String).slice(-500));
+  skip.add(key(track));
+  const list = track.source === 'youtube' ? await getRelatedYouTube(track.id, 30) : await relatedSoundCloud(track.id, 30);
+  const fresh = list.filter((t) => !skip.has(key(t)));
+  const tracks = await playable(fresh, 15);
+  logger.info('recommend', `Similar to "${track.title}": ${tracks.length} track(s)`, { candidates: list.length });
+  return tracks;
+}
