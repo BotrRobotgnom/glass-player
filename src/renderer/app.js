@@ -300,7 +300,7 @@
   function markCurrentRows() {
     const n = state.now;
     const keys = new Set(n ? [n.shown, n.yt, n.sc].filter(Boolean).map((x) => x.source + ':' + x.id) : []);
-    $$('.row[data-key]').forEach((row) => row.classList.toggle('current', keys.has(row.dataset.key)));
+    $$('.row[data-key], .tcard[data-key]').forEach((row) => row.classList.toggle('current', keys.has(row.dataset.key)));
   }
 
   function renderLists() {

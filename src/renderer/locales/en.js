@@ -72,6 +72,8 @@ window.__locales.en = {
 
   'tabs.home': 'Home',
   'home.refresh': 'Refresh',
+  'home.next': 'Scroll right',
+  'home.previous': 'Scroll left',
   'home.loading': 'Finding music you might like…',
   'home.empty': 'Nothing to suggest yet. Play a few tracks and suggestions based on them will appear here.',
   'home.failed': 'Could not load suggestions. Check your connection and try again.',

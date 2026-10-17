@@ -4,6 +4,12 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.2
+
+### Changed
+- Home lists are now horizontal rows of cards (cover, title, artist) that scroll sideways, with arrows next to each title, so you can reach the list you want without scrolling past every track.
+- Home now always shows YouTube Music's own shelves (home page and Explore: popular, new releases and so on), not only for new users.
+
 ## 0.2.1
 
 ### Added

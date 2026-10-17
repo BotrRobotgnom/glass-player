@@ -85,22 +85,22 @@ async function build(seeds) {
     }
   }
 
-  // YouTube Music's own home shelves help most when we know little about the user yet
-  if (seeds.length < 3 || !yt.length) {
-    try {
-      for (const shelf of await getHomeYouTube(2)) {
-        const tracks = await playable(shelf.tracks.filter((t) => !exclude.has(key(t))), 10);
-        if (tracks.length >= 3) sections.push({ id: 'ythome-' + shelf.title, kind: 'shelf', title: shelf.title, tracks });
-      }
-    } catch (err) {
-      errors.push('youtube');
-      logger.warn('recommend', 'YouTube Music home feed failed', { error: String(err.message || err) });
-    }
+  // YouTube Music's own shelves (home and Explore: popular, new releases, ...). Not filtered by history:
+  // popular music is meant to be shown, even if it was heard before.
+  try {
+    const shelves = await getHomeYouTube(6);
+    const checked = await Promise.all(shelves.map((s) => playable(s.tracks, 14)));
+    shelves.forEach((shelf, i) => {
+      if (checked[i].length >= 3) sections.push({ id: 'ythome-' + shelf.title, kind: 'shelf', title: shelf.title, tracks: checked[i] });
+    });
+  } catch (err) {
+    errors.push('youtube');
+    logger.warn('recommend', 'YouTube Music home feed failed', { error: String(err.message || err) });
   }
 
   // SoundCloud trending: always available, no history needed
   try {
-    const tracks = (await trendingSoundCloud(30)).filter((t) => !exclude.has(key(t))).slice(0, 15);
+    const tracks = (await trendingSoundCloud(30)).slice(0, 20);
     if (tracks.length >= 3) sections.push({ id: 'trending-soundcloud', kind: 'trending', source: 'soundcloud', tracks });
   } catch (err) {
     errors.push('soundcloud');

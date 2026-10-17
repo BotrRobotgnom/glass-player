@@ -103,20 +103,50 @@ export async function getRelatedYouTube(videoId, limit = 25) {
     .slice(0, limit);
 }
 
-// The (not personalised, because we are not signed in) YouTube Music home page: shelves of songs
-export async function getHomeYouTube(maxShelves = 3) {
-  const yt = await getYT();
-  const feed = await yt.music.getHomeFeed();
+// A track from a home / explore shelf. Shelves mix two node types (list items and "two row" cards)
+function shelfTrack(item) {
+  if (!item || (item.item_type !== 'song' && item.item_type !== 'video') || !item.id) return null;
+  const thumbs = item.thumbnails || item.thumbnail;
+  const list = Array.isArray(thumbs) ? thumbs : thumbs?.contents || [];
+  const names = (item.artists || item.authors || (item.author ? [item.author] : [])).map((x) => x.name).filter(Boolean);
+  return {
+    id: item.id,
+    source: 'youtube',
+    title: String(item.title?.toString?.() ?? item.title ?? ''),
+    artist: names.join(', ') || String(item.subtitle?.toString?.() || '').split('•')[1]?.trim() || '',
+    album: item.album?.name || '',
+    durationSec: item.duration?.seconds || 0,
+    cover: bestThumb(list),
+    url: `https://music.youtube.com/watch?v=${item.id}`,
+    hasVideo: item.item_type === 'video',
+  };
+}
+
+function shelvesOf(sections, max) {
   const out = [];
-  for (const shelf of feed?.sections || []) {
+  for (const shelf of sections || []) {
     const title = shelf?.header?.title?.toString?.() || '';
-    const tracks = [...(shelf?.contents || [])]
-      .filter((i) => i && (i.item_type === 'song' || i.item_type === 'video'))
-      .map(toTrack)
-      .filter(Boolean);
-    if (title && tracks.length >= 3) out.push({ title, tracks });
-    if (out.length >= maxShelves) break;
+    const tracks = [...(shelf?.contents || [])].map(shelfTrack).filter(Boolean);
+    if (title && tracks.length >= 3) out.push({ title, tracks: tracks.slice(0, 20) });
+    if (out.length >= max) break;
   }
+  return out;
+}
+
+// YouTube Music's home page (not personalised: we are not signed in) and its Explore page
+// (new releases, trending, top videos): shelves of songs
+export async function getHomeYouTube(maxShelves = 6) {
+  const yt = await getYT();
+  const out = [];
+  const take = (shelves) => {
+    for (const s of shelves) if (out.length < maxShelves && !out.some((o) => o.title === s.title)) out.push(s);
+  };
+  const [home, explore] = await Promise.allSettled([yt.music.getHomeFeed(), yt.music.getExplore()]);
+  if (home.status === 'fulfilled') take(shelvesOf(home.value?.sections, 4));
+  else logger.warn('youtube', 'Home feed failed', { error: String(home.reason?.message || home.reason) });
+  if (explore.status === 'fulfilled') take(shelvesOf(explore.value?.sections, 3));
+  else logger.warn('youtube', 'Explore feed failed', { error: String(explore.reason?.message || explore.reason) });
+  if (!out.length && home.status === 'rejected' && explore.status === 'rejected') throw home.reason;
   return out;
 }
 

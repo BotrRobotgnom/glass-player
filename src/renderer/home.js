@@ -1,4 +1,5 @@
 // Home: recommendations based on the local listening history (built in the main process, see main/recommend.js)
+// plus YouTube Music's popular shelves and the SoundCloud trending chart. Every list is a horizontal row of cards.
 (() => {
   'use strict';
 
@@ -35,6 +36,59 @@
     return bar;
   }
 
+  // One track: cover, title, artist. Hovering the cover offers "add to queue" and "add to playlist"
+  function card(track, list) {
+    const c = el('div', 'tcard');
+    c.dataset.key = track.source + ':' + track.id;
+    c.title = [track.title, track.artist].filter(Boolean).join(' — ');
+    const art = el('div', 'tcard-art');
+    if (track.cover) {
+      const img = el('img');
+      img.src = track.cover;
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.alt = '';
+      art.append(img);
+    } else art.append(el('span', 'tcard-ph', '♪'));
+    const acts = el('div', 'tcard-acts');
+    for (const a of [{ icon: 'i-plus', title: t('row.addToQueue'), onClick: () => GP.addToQueue(track) }, GP.playlistAction(track)]) {
+      const b = el('button', 'act');
+      b.type = 'button';
+      b.title = a.title;
+      b.append(GP.icon(a.icon));
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        a.onClick(b);
+      });
+      acts.append(b);
+    }
+    art.append(acts);
+    c.append(art, el('div', 'title', track.title), el('div', 'sub', track.artist));
+    c.addEventListener('click', () => GP.playFrom(list, track));
+    return c;
+  }
+
+  // A titled row of cards with arrows (a mouse wheel scrolls the page, not the row)
+  function shelf(s) {
+    const wrap = el('section', 'shelf');
+    const head = el('div', 'shelf-head');
+    const arrow = (dir) => {
+      const b = el('button', 'shelf-arrow' + (dir > 0 ? ' next' : ''));
+      b.type = 'button';
+      b.title = t(dir > 0 ? 'home.next' : 'home.previous');
+      b.append(GP.icon('i-back'));
+      b.addEventListener('click', () => track.scrollBy({ left: dir * track.clientWidth * 0.85, behavior: 'smooth' }));
+      return b;
+    };
+    const track = el('div', 'shelf-track');
+    for (const tr of s.tracks) track.append(card(tr, s.tracks));
+    const arrows = el('div', 'shelf-arrows');
+    arrows.append(arrow(-1), arrow(1));
+    head.append(el('h4', 'shelf-title', sectionTitle(s)), arrows);
+    wrap.append(head, track);
+    return wrap;
+  }
+
   function render() {
     const scroll = box.scrollTop;
     const parts = [toolbar()];
@@ -44,17 +98,7 @@
       parts.push(GP.emptyMessage(t(data && data.errors.length ? 'home.failed' : 'home.empty')));
     } else {
       if (!data.seeds) parts.push(el('div', 'home-hint', t('home.noHistory')));
-      for (const s of data.sections) {
-        parts.push(GP.groupTitle(sectionTitle(s)));
-        for (const track of s.tracks) {
-          parts.push(
-            GP.makeRow(track, {
-              onPlay: () => GP.playFrom(s.tracks, track),
-              actions: [{ icon: 'i-plus', title: t('row.addToQueue'), onClick: () => GP.addToQueue(track) }, GP.playlistAction(track)],
-            }),
-          );
-        }
-      }
+      for (const s of data.sections) parts.push(shelf(s));
     }
     box.replaceChildren(...parts);
     GP.markCurrentRows();
