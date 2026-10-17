@@ -1,7 +1,11 @@
-# Builds and creates a draft release when a tag like v0.0.2 is pushed, then fills in its description
-# from CHANGELOG.md (scripts/release-notes.mjs).
-# The release is a DRAFT: it becomes public (and visible to auto-update) only after
-# you press Publish on the Releases page.
+# Builds the app and creates a DRAFT release when a tag like v0.2.5 is pushed.
+# The draft becomes public (and visible to auto-update) only after you press Publish on the Releases page.
+#
+# How it avoids the "two drafts / wrong tag / files mixed between versions" problems:
+#   1. ONE job (draft) creates the draft, with the description built from CHANGELOG.md, and passes its id on.
+#   2. The build jobs only build and upload files to THAT id. electron-builder never searches for or creates a release
+#      (--publish never), so it cannot pick up another version's draft or create duplicates.
+#   3. Nothing here touches git tags, and a release that is already published is never modified.
 name: Release
 
 on:
@@ -12,38 +16,16 @@ on:
 permissions:
   contents: write
 
+# the same tag never runs twice at once (a re-run waits instead of racing)
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  linux:
+  draft:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx electron-builder --linux --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # The description comes from CHANGELOG.md: this version's section, plus the sections of earlier
-  # versions that were never published (all of them for the very first release).
-  notes:
-    needs: [windows, linux]
-    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.draft.outputs.id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,12 +41,62 @@ jobs:
           echo "Published releases: ${PUBLISHED:-none}"
           node scripts/release-notes.mjs "$TAG" --published "$PUBLISHED" > notes.md
           cat notes.md
-      - name: Put the notes into the draft release
+      - name: Create (or reuse) the draft release
+        id: draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          # gh can't look a draft up by tag, so find its id through the API
-          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name==\"$TAG\") | .id" | head -n1)
-          if [ -z "$ID" ]; then echo "No release found for $TAG"; exit 1; fi
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" -F body=@notes.md
+          # A release of this exact version, found by tag name or by title (a draft may be listed as "untagged-...")
+          FOUND=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name==\"$TAG\" or .name==\"$TAG\") | \"\(.id) \(.draft)\"" | head -n1)
+          if [ -n "$FOUND" ]; then
+            ID=${FOUND% *}
+            DRAFT=${FOUND#* }
+            if [ "$DRAFT" != "true" ]; then
+              echo "::error::$TAG is already published. Published releases are never changed."
+              exit 1
+            fi
+            echo "Reusing the existing draft $ID"
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" -F body=@notes.md > /dev/null
+          else
+            ID=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$TAG" -f name="$TAG" -F draft=true -F body=@notes.md --jq .id)
+            echo "Created draft $ID"
+          fi
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: draft
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx electron-builder --win --publish never
+      - name: Upload to the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.draft.outputs.id }}
+        run: bash scripts/upload-assets.sh dist/GlassPlayer-Setup-*.exe dist/GlassPlayer-Setup-*.exe.blockmap dist/GlassPlayer-Portable-*.exe dist/latest.yml
+
+  linux:
+    needs: draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx electron-builder --linux --publish never
+      - name: Upload to the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.draft.outputs.id }}
+        run: bash scripts/upload-assets.sh dist/GlassPlayer-*.AppImage dist/latest-linux.yml

@@ -4,6 +4,11 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.5
+
+### Fixed
+- Publishing a release could mix up versions: a build for one version could land in the draft of another, with files and descriptions doubled and the draft shown under an "untagged-..." name. One step now creates the draft with its description, and the builds only upload to that exact draft. Published releases are never touched.
+
 ## 0.2.4
 
 ### Added
