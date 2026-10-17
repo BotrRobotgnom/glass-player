@@ -5,7 +5,7 @@
 import * as library from './library.js';
 import * as logger from './logger.js';
 import { getRelatedYouTube, getHomeYouTube, markEmbeddable } from './youtube.js';
-import { relatedSoundCloud, trendingSoundCloud } from './soundcloud.js';
+import { relatedSoundCloud, trendingSoundCloud, searchSoundCloud } from './soundcloud.js';
 
 const TTL = 30 * 60 * 1000;
 const MAX_SEEDS = 8;
@@ -133,7 +133,20 @@ export async function getSimilar(track, exclude = []) {
   if (!track || !track.id || (track.source !== 'youtube' && track.source !== 'soundcloud')) return [];
   const skip = new Set([...exclude].map(String).slice(-500));
   skip.add(key(track));
-  const list = track.source === 'youtube' ? await getRelatedYouTube(track.id, 30) : await relatedSoundCloud(track.id, 30);
+  let list = [];
+  try {
+    list = track.source === 'youtube' ? await getRelatedYouTube(track.id, 30) : await relatedSoundCloud(track.id, 30);
+  } catch (err) {
+    logger.warn('recommend', `Related tracks unavailable for "${track.title}", falling back to the artist`, err);
+  }
+  // "related" is missing for some tracks (private, restricted): fall back to other tracks by the same artist
+  if (!list.length && track.artist) {
+    try {
+      list = track.source === 'youtube' ? await getRelatedYouTube(track.id, 30).catch(() => []) : await searchSoundCloud(track.artist, 30);
+    } catch (err) {
+      logger.warn('recommend', 'Artist fallback failed', err);
+    }
+  }
   const fresh = list.filter((t) => !skip.has(key(t)));
   const tracks = await playable(fresh, 15);
   logger.info('recommend', `Similar to "${track.title}": ${tracks.length} track(s)`, { candidates: list.length });

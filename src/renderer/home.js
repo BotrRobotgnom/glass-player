@@ -82,6 +82,33 @@
     };
     const track = el('div', 'shelf-track');
     for (const tr of s.tracks) track.append(card(tr, s.tracks));
+    // drag with the left mouse button to scroll sideways; a real drag must not click the card under the cursor
+    let drag = null;
+    track.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      drag = { x: e.clientX, left: track.scrollLeft, moved: false, id: e.pointerId };
+    });
+    track.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) > 5) {
+        drag.moved = true;
+        track.classList.add('dragging');
+        try { track.setPointerCapture(e.pointerId); } catch {}
+      }
+      if (drag.moved) track.scrollLeft = drag.left - dx;
+    });
+    const endDrag = () => {
+      if (drag && drag.moved) {
+        const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+        track.addEventListener('click', swallow, { capture: true, once: true });
+        setTimeout(() => track.removeEventListener('click', swallow, { capture: true }), 0);
+      }
+      drag = null;
+      track.classList.remove('dragging');
+    };
+    track.addEventListener('pointerup', endDrag);
+    track.addEventListener('pointercancel', endDrag);
     const arrows = el('div', 'shelf-arrows');
     arrows.append(arrow(-1), arrow(1));
     head.append(el('h4', 'shelf-title', sectionTitle(s)), arrows);

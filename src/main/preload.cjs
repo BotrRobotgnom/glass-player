@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   search: (query, sources) => ipcRenderer.invoke('search', { query, sources }),
   suggest: (query) => ipcRenderer.invoke('suggest', query),
-  findOfficial: (track) => ipcRenderer.invoke('findOfficial', track),
+  findOfficial: (track, target) => ipcRenderer.invoke('findOfficial', track, target),
   version: () => ipcRenderer.invoke('app:version'),
   update: {
     get: () => ipcRenderer.invoke('update:get'),

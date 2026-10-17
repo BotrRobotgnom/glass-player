@@ -334,29 +334,34 @@ ipcMain.handle('search', async (_e, { query, sources }) => {
   return await done();
 });
 
-// For a SoundCloud track, look for the official version on YouTube Music.
-ipcMain.handle('findOfficial', async (_e, track) => {
+// Look for the same track on the other service: target "youtube" (official version on YouTube Music) or "soundcloud".
+ipcMain.handle('findOfficial', async (_e, track, target = 'youtube') => {
   try {
     const { artist, title } = splitArtistTitle(track);
     const query = [artist, title].filter(Boolean).join(' ');
-    const all = await searchYouTube(query, { type: 'song', limit: 8 });
-    await markEmbeddable(all);
-    // an official version that the player refuses to embed is useless: keep only playable candidates
-    const candidates = all.filter((c) => c.embeddable !== false);
-    if (candidates.length < all.length) logger.info('match', `Skipped ${all.length - candidates.length} non-embeddable candidate(s)`);
+    let candidates;
+    if (target === 'soundcloud') {
+      candidates = await searchSoundCloud(query, 8);
+    } else {
+      const all = await searchYouTube(query, { type: 'song', limit: 8 });
+      await markEmbeddable(all);
+      // an official version that the player refuses to embed is useless: keep only playable candidates
+      candidates = all.filter((c) => c.embeddable !== false);
+      if (candidates.length < all.length) logger.info('match', `Skipped ${all.length - candidates.length} non-embeddable candidate(s)`);
+    }
     const best = pickBest(track, candidates);
     if (best) {
-      logger.info('match', `Official version found for "${track.title}"`, {
+      logger.info('match', `Match found on ${target} for "${track.title}"`, {
         match: `${best.track.artist} - ${best.track.title}`,
         score: Number(best.score.toFixed(2)),
         candidates: candidates.length,
       });
     } else {
-      logger.info('match', `No official version found for "${track.title}"`, { query, candidates: candidates.length });
+      logger.info('match', `No match on ${target} for "${track.title}"`, { query, candidates: candidates.length });
     }
     return best ? { track: best.track, score: best.score } : null;
   } catch (err) {
-    logger.warn('match', 'Official version lookup failed', err);
+    logger.warn('match', 'Match lookup failed', err);
     return null;
   }
 });

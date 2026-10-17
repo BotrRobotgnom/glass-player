@@ -4,6 +4,20 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.7
+
+### Added
+- Settings: "Priority" is now a three-position slider (YouTube Music / SoundCloud / none). SoundCloud priority looks for the SoundCloud version of a YouTube track.
+- Home shelves can be dragged sideways with the left mouse button, and each shelf is shown as its own recessed block.
+
+### Changed
+- All scrollbars share the thin rounded style of the lists, including the Home shelves and the now-playing panel.
+- A SoundCloud track that can't be played falls back to its YouTube Music version, with a clearer message when there is none.
+- Similar tracks fall back to the artist's other tracks when SoundCloud has no "related" list for a track.
+
+### Fixed
+- A scrollbar flashed in the now-playing panel while resizing the window vertically.
+
 ## 0.2.6
 
 ### Changed

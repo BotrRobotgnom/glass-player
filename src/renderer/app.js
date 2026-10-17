@@ -57,7 +57,7 @@
     repeat: 'off', // off | all | one
     shuffle: false,
     sources: store.get('sources', { youtube: true, soundcloud: true }),
-    priorityYT: store.get('priorityYT', true),
+    priority: store.get('priority', store.get('priorityYT', true) ? 'youtube' : 'none'),
     autoSimilar: store.get('autoSimilar', true),
     volume: store.get('volume', 80),
     muted: false,
@@ -405,19 +405,20 @@
     resetListening();
     log('info', `Play: ${track.artist} - ${track.title}`, { source: track.source, id: track.id });
     let yt = track.source === 'youtube' ? track : null;
-    const sc = track.source === 'soundcloud' ? track : null;
+    let sc = track.source === 'soundcloud' ? track : null;
     let shown = track;
 
-    // YouTube priority: for a SoundCloud track, look for the official version on YouTube Music
-    if (sc && state.priorityYT) {
+    // Priority: look for the same track on the preferred service
+    const want = state.priority === 'youtube' && sc ? 'youtube' : state.priority === 'soundcloud' && yt ? 'soundcloud' : null;
+    if (want) {
       setStatus(t('np.looking'));
-      renderNow({ shown: sc, yt: null, sc });
-      const found = await Promise.race([window.api.findOfficial(sc), timeout(4000, null)]);
+      renderNow({ shown: track, yt, sc });
+      const found = await Promise.race([window.api.findOfficial(track, want), timeout(4000, null)]);
       if (token !== state.token) return; // the user already picked another track
-      log('info', found && found.track ? 'Using the official YouTube Music version' : 'No official version, playing from SoundCloud');
+      log('info', found && found.track ? `Using the ${want} version` : `No ${want} version, playing the picked one`);
       if (found && found.track) {
-        yt = found.track;
-        shown = yt;
+        if (want === 'youtube') yt = shown = found.track;
+        else sc = shown = found.track;
       }
     }
 
@@ -477,6 +478,14 @@
       renderNow(state.now);
       return;
     }
+    // The preferred SoundCloud version failed but a YouTube one is known
+    if (n && n.shown.source === 'soundcloud' && n.yt && !n.triedYT) {
+      state.now = { ...n, shown: n.yt, triedYT: true };
+      state.token++;
+      startEngine(n.yt);
+      renderNow(state.now);
+      return;
+    }
     // Some videos forbid embedding: then try the SoundCloud version, if there is one
     if (n && n.shown.source === 'youtube' && n.sc) {
       toast(t('play.embedBlocked'));
@@ -486,8 +495,27 @@
       renderNow(state.now);
       return;
     }
+    // A SoundCloud track that won't play: try the same track on YouTube Music once
+    if (n && n.shown.source === 'soundcloud' && !n.yt && !n.triedYT && state.priority !== 'none') {
+      const token = ++state.token;
+      state.now = { ...n, triedYT: true };
+      window.api.findOfficial(n.shown, 'youtube').then((found) => {
+        if (token !== state.token) return;
+        if (found && found.track) {
+          log('info', 'SoundCloud failed, using the YouTube Music version');
+          state.now = { shown: found.track, yt: found.track, sc: n.sc, triedYT: true };
+          startEngine(found.track);
+          renderNow(state.now);
+        } else failSkip(code, n);
+      });
+      return;
+    }
+    failSkip(code, n);
+  }
+
+  function failSkip(code, n) {
     state.errorStreak++;
-    toast(t('play.failed', { code: code ? ` (code ${code})` : '' }));
+    toast(n && n.shown.source === 'soundcloud' ? t('play.unavailable') : t('play.failed', { code: code ? ` (code ${code})` : '' }));
     if (state.errorStreak <= Math.max(3, state.queue.length)) setTimeout(() => next(true), 900);
   }
 
@@ -942,7 +970,7 @@
   const effectSel = $('#effect');
   const effectHint = $('#effectHint');
   const theme = $('#theme');
-  const priority = $('#priorityYT');
+  const priority = $('#priority');
   const root = document.documentElement;
 
   let effect = 'none';
@@ -1080,10 +1108,23 @@
     log('info', `Video ${videoOn ? 'shown' : 'hidden'}`);
   });
 
-  priority.checked = state.priorityYT;
-  priority.addEventListener('change', () => {
-    state.priorityYT = priority.checked;
-    store.set('priorityYT', state.priorityYT);
+  const showPriority = () => {
+    const btns = [...priority.querySelectorAll('button')];
+    btns.forEach((b, i) => {
+      const on = b.dataset.value === state.priority;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+      if (on) priority.dataset.pos = String(i);
+    });
+  };
+  showPriority();
+  priority.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-value]');
+    if (!b) return;
+    state.priority = b.dataset.value;
+    store.set('priority', state.priority);
+    showPriority();
+    log('info', `Priority: ${state.priority}`);
   });
 
   // The settings window: sections on the left, the chosen one on the right
