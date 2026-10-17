@@ -98,7 +98,8 @@
       else if (histView === 'top') bits.push(plural('history.plays', it.plays));
       else bits.push(plural('history.plays', it.plays), ago(it.last));
       return GP.makeRow(it.track, {
-        onPlay: () => GP.playFrom(items.map((x) => x.track), it.track),
+        // history is a log, not a playlist: playing a row plays that track only (the queue is not filled with the list)
+        onPlay: () => GP.playFrom([it.track], it.track),
         subText: bits.filter(Boolean).join(' · '),
         actions: [queueAction(it.track), GP.playlistAction(it.track)],
         remove: {

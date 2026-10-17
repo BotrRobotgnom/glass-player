@@ -278,6 +278,15 @@
       box.appendChild(emptyMessage(t('queue.empty')));
       return;
     }
+    const bar = document.createElement('div');
+    bar.className = 'toolbar';
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'swap';
+    clear.append(icon('i-trash'), Object.assign(document.createElement('span'), { textContent: t('queue.clear') }));
+    clear.addEventListener('click', clearQueue);
+    bar.append(clear);
+    box.appendChild(bar);
     state.queue.forEach((track, i) => {
       const row = makeRow(track, {
         onPlay: () => playIndex(i),
@@ -314,6 +323,14 @@
     state.queue.push(track);
     renderQueue();
     toast(t('toast.added'));
+  }
+
+  // Empties the queue; the track that is playing stays (as the only entry)
+  function clearQueue() {
+    const current = state.index >= 0 ? state.queue[state.index] : null;
+    state.queue = current ? [current] : [];
+    state.index = current ? 0 : -1;
+    renderQueue();
   }
 
   function removeFromQueue(i) {
@@ -980,6 +997,9 @@
     if (cmd === 'prev') prev();
     else if (cmd === 'next') next(false);
     else if (cmd === 'toggle') togglePlay();
+    else if (cmd && cmd.type === 'seek' && state.active && state.dur) {
+      engineOf(state.active).seek(cmd.fraction * state.dur);
+    }
   });
   const reportToTray = () => {
     const n = state.now;
@@ -990,6 +1010,8 @@
       cur: state.cur,
       dur: state.dur,
       playing: state.playing,
+      cover: n ? n.shown.cover : '',
+      theme: document.documentElement.dataset.theme,
     });
   };
   setInterval(reportToTray, 1000);

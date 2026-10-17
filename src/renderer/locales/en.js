@@ -90,6 +90,7 @@ window.__locales.en = {
   'results.empty': 'Search for a track or paste a YouTube / SoundCloud link',
   'results.loading': 'Searching…',
   'results.none': 'Nothing found',
+  'queue.clear': 'Clear queue',
   'queue.empty': 'The queue is empty',
   'group.youtube': 'YouTube Music',
   'group.soundcloud': 'SoundCloud',

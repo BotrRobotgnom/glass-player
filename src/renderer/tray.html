@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:" />
+  <title>Glass Player</title>
+  <style>
+    :root { --bg: #eef0f6; --text: #1b1f2a; --dim: #5d6577; --line: rgba(0,0,0,.14); --accent: #3b6cff; --hover: rgba(0,0,0,.07); --edge: rgba(0,0,0,.12); }
+    :root[data-theme='graphite'] { --bg: #20232c; --text: #eef0f6; --dim: #a2a9bb; --line: rgba(255,255,255,.2); --hover: rgba(255,255,255,.1); --edge: rgba(255,255,255,.14); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 13px/1.35 'Segoe UI', system-ui, sans-serif; user-select: none; }
+    body { padding: 14px 16px; border: 1px solid var(--edge); display: flex; flex-direction: column; gap: 10px; }
+    .top { display: flex; gap: 12px; align-items: center; }
+    .cover { flex: none; width: 56px; height: 56px; border-radius: 10px; background: var(--hover) center / cover; box-shadow: inset 0 0 0 1px var(--edge); }
+    .meta { flex: 1; min-width: 0; }
+    .title { font-weight: 650; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .artist { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar { position: relative; height: 14px; display: flex; align-items: center; cursor: pointer; }
+    .bar::before { content: ''; position: absolute; left: 0; right: 0; height: 4px; border-radius: 4px; background: var(--line); }
+    .fill { position: relative; height: 4px; border-radius: 4px; background: var(--accent); width: 0; transition: width .9s linear; }
+    .bar:hover::before, .bar:hover .fill { height: 6px; }
+    .times { display: flex; justify-content: space-between; color: var(--dim); font-size: 11.5px; font-variant-numeric: tabular-nums; margin-top: -6px; }
+    .ctrl { display: flex; justify-content: center; align-items: center; gap: 14px; }
+    button { border: 0; background: transparent; color: var(--text); cursor: pointer; border-radius: 50%; display: grid; place-items: center; padding: 0; }
+    button:hover:not(:disabled) { background: var(--hover); }
+    button:disabled { opacity: .4; cursor: default; }
+    button svg { width: 20px; height: 20px; fill: currentColor; }
+    .ctrl button { width: 36px; height: 36px; }
+    .ctrl .main { width: 44px; height: 44px; background: var(--accent); color: #fff; }
+    .ctrl .main:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+    .ctrl .main svg { width: 22px; height: 22px; }
+    .open { width: 28px; height: 28px; align-self: flex-start; }
+    .open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div id="cover" class="cover"></div>
+    <div class="meta"><div id="title" class="title"></div><div id="artist" class="artist"></div></div>
+    <button id="open" class="open" type="button"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+  </div>
+  <div>
+    <div id="bar" class="bar"><div id="fill" class="fill"></div></div>
+    <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+  </div>
+  <div class="ctrl">
+    <button id="prev" type="button"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
+    <button id="toggle" class="main" type="button">
+      <svg id="iPlay" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="iPause" class="hidden" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+    </button>
+    <button id="next" type="button"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/></svg></button>
+  </div>
+  <script src="tray.js"></script>
+</body>
+</html>

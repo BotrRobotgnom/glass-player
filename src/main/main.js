@@ -177,12 +177,14 @@ async function createWindow() {
       return;
     }
     closeDebugWindow();
+    trayIcon.destroyPopup(); // a hidden popup would keep the app alive after its last window is closed
   });
   win.on('show', () => trayIcon.refresh());
   win.on('hide', () => trayIcon.refresh());
 
   trayIcon.createTray({
     window: () => win,
+    origin: () => origin,
     onCommand: (cmd) => win && !win.isDestroyed() && win.webContents.send('player:command', cmd),
   });
 

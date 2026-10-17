@@ -1,6 +1,6 @@
 // System tray: an icon with a menu (track info, previous / play-pause / next, show, quit) and a tooltip
 // that follows the current track. Also decides whether closing the window hides it to the tray or quits.
-import { app, Menu, nativeImage, Tray } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as logger from './logger.js';
@@ -12,7 +12,10 @@ let getWindow = () => null;
 let sendCommand = () => {};
 let closeToTray = false;
 let quitting = false;
-let now = { hasTrack: false, title: '', artist: '', cur: 0, dur: 0, playing: false };
+let now = { hasTrack: false, title: '', artist: '', cur: 0, dur: 0, playing: false, cover: '', theme: 'silver' };
+let getOrigin = () => '';
+let popup = null;
+let popupHiddenAt = 0;
 let labels = {
   show: 'Show Glass Player',
   hide: 'Hide window',
@@ -33,8 +36,14 @@ const fmt = (sec) => {
 export const isTrayAvailable = () => !!tray;
 export const isQuitting = () => quitting;
 
+export function destroyPopup() {
+  if (popup && !popup.isDestroyed()) popup.destroy();
+  popup = null;
+}
+
 export function markQuitting() {
   quitting = true;
+  destroyPopup();
 }
 
 // Whether the window's close button should hide the window instead of closing it
@@ -56,14 +65,92 @@ export function showWindow() {
   rebuildMenu(true);
 }
 
-function toggleWindow() {
-  const win = getWindow();
-  if (!win || win.isDestroyed()) return;
-  if (win.isVisible() && !win.isMinimized() && win.isFocused()) {
-    win.hide();
-    rebuildMenu(true);
-  } else showWindow();
+// ---------- The small player popup ----------
+const POPUP_W = 340;
+const POPUP_H = 178;
+
+function popupState() {
+  return { ...now, labels };
 }
+
+function pushPopupState() {
+  if (popup && !popup.isDestroyed() && popup.isVisible()) popup.webContents.send('tray:state', popupState());
+}
+
+function createPopup() {
+  popup = new BrowserWindow({
+    width: POPUP_W,
+    height: POPUP_H,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    title: 'Glass Player',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-tray.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  popup.setMenuBarVisibility(false);
+  popup.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  popup.webContents.on('will-navigate', (e) => e.preventDefault());
+  popup.on('blur', () => hidePopup());
+  popup.on('closed', () => {
+    popup = null;
+  });
+  popup.loadURL(`${getOrigin()}/tray.html`).catch((err) => logger.warn('tray', 'Popup failed to load', { error: String(err.message || err) }));
+}
+
+function hidePopup() {
+  if (popup && !popup.isDestroyed() && popup.isVisible()) {
+    popup.hide();
+    popupHiddenAt = Date.now();
+  }
+}
+
+// Next to the tray icon; where the system gives no icon position (some Linux desktops), at the mouse
+function placePopup(bounds) {
+  const hasBounds = bounds && bounds.width > 0 && bounds.height > 0;
+  const anchor = hasBounds ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } : screen.getCursorScreenPoint();
+  const area = screen.getDisplayNearestPoint({ x: Math.round(anchor.x), y: Math.round(anchor.y) }).workArea;
+  let x = Math.round(anchor.x - POPUP_W / 2);
+  const below = anchor.y < area.y + area.height / 2; // the tray is at the top: open downwards
+  let y = below ? Math.round((hasBounds ? bounds.y + bounds.height : anchor.y) + 8) : Math.round((hasBounds ? bounds.y : anchor.y) - POPUP_H - 8);
+  x = Math.min(Math.max(x, area.x + 8), area.x + area.width - POPUP_W - 8);
+  y = Math.min(Math.max(y, area.y + 8), area.y + area.height - POPUP_H - 8);
+  popup.setPosition(x, y, false);
+}
+
+export function togglePopup(bounds) {
+  // clicking the icon while the popup is open first blurs (hides) it: do not open it again right away
+  if (Date.now() - popupHiddenAt < 300) return;
+  if (!popup || popup.isDestroyed()) createPopup();
+  if (popup.isVisible()) return hidePopup();
+  placePopup(bounds);
+  popup.webContents.send('tray:state', popupState());
+  popup.show();
+  popup.focus();
+}
+
+ipcMain.on('tray:popupReady', () => pushPopupState());
+ipcMain.on('tray:popupCommand', (_e, cmd) => {
+  if (cmd === 'prev' || cmd === 'next' || cmd === 'toggle') sendCommand(cmd);
+  else if (cmd && cmd.type === 'seek' && Number.isFinite(cmd.fraction)) sendCommand({ type: 'seek', fraction: Math.min(1, Math.max(0, cmd.fraction)) });
+});
+ipcMain.on('tray:popupOpen', () => {
+  hidePopup();
+  showWindow();
+});
+ipcMain.on('tray:popupClose', () => hidePopup());
+if (process.env.GP_TEST) ipcMain.on('tray:test', (_e, bounds) => togglePopup(bounds)); // lets automated tests open the popup
 
 function tooltip() {
   if (!now.hasTrack) return 'Glass Player';
@@ -105,10 +192,13 @@ export function setNowPlaying(info) {
     cur: Number(info.cur) || 0,
     dur: Number(info.dur) || 0,
     playing: !!info.playing,
+    cover: typeof info.cover === 'string' && /^https:\/\//.test(info.cover) ? info.cover.slice(0, 600) : '',
+    theme: info.theme === 'graphite' ? 'graphite' : 'silver',
   };
   if (!tray) return;
   tray.setToolTip(tooltip());
   rebuildMenu();
+  pushPopupState();
 }
 
 export const refresh = () => rebuildMenu(true);
@@ -119,8 +209,9 @@ export function setLabels(next) {
   rebuildMenu(true);
 }
 
-export function createTray({ window, onCommand }) {
+export function createTray({ window, onCommand, origin }) {
   getWindow = window;
+  getOrigin = origin;
   sendCommand = onCommand;
   try {
     const file = path.join(__dirname, '..', '..', 'build', 'icon.png');
@@ -129,7 +220,7 @@ export function createTray({ window, onCommand }) {
     if (icon.isEmpty()) throw new Error('the tray icon file is missing');
     tray = new Tray(icon);
     tray.setToolTip('Glass Player');
-    tray.on('click', toggleWindow); // Windows and some Linux desktops; the menu covers the rest
+    tray.on('click', (_e, bounds) => togglePopup(bounds)); // Windows and some Linux desktops; the menu covers the rest
     tray.on('double-click', showWindow);
     rebuildMenu(true);
     logger.info('tray', 'Tray icon created');

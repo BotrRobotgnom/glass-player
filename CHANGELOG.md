@@ -4,6 +4,15 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.3
+
+### Added
+- Clicking the tray icon opens a small player: cover, title and artist, a progress line (click it to seek) and horizontal Previous / Play-Pause / Next buttons. It closes when you click elsewhere or press Esc. The right-click menu stays (Show, Quit and the same controls).
+- A "Clear queue" button in the Queue tab (the playing track stays).
+
+### Changed
+- Playing a track from History now plays only that track instead of filling the queue with the whole history.
+
 ## 0.2.2
 
 ### Changed
