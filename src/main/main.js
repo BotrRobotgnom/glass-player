@@ -12,6 +12,7 @@ import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
 import * as library from './library.js';
 import { getHome } from './recommend.js';
+import * as autostart from './autostart.js';
 import * as trayIcon from './tray.js';
 import { registerDebugIpc, openDebugWindow, closeDebugWindow } from './debugWindow.js';
 
@@ -150,6 +151,11 @@ async function createWindow() {
 
   win.once('ready-to-show', () => {
     logger.info('window', 'Window ready');
+    // started by the system at login: go straight to the tray (without one, show the window so the app is not lost)
+    if (process.argv.includes(autostart.HIDDEN_ARG) && trayIcon.isTrayAvailable()) {
+      logger.info('window', 'Started hidden in the tray');
+      return;
+    }
     win.show();
   });
   win.on('maximize', () => {
@@ -231,6 +237,8 @@ ipcMain.handle('win:toggleMaximize', () => {
   win.isMaximized() ? win.unmaximize() : win.maximize();
 });
 ipcMain.handle('win:close', () => win?.close());
+ipcMain.handle('autostart:get', () => ({ available: autostart.isAvailable(), enabled: autostart.isEnabled() }));
+ipcMain.handle('autostart:set', (_e, on) => ({ available: autostart.isAvailable(), enabled: autostart.setEnabled(!!on) }));
 ipcMain.on('tray:setCloseToTray', (_e, on) => trayIcon.setCloseToTray(on));
 ipcMain.on('tray:labels', (_e, labels) => trayIcon.setLabels(labels));
 ipcMain.on('player:state', (_e, info) => trayIcon.setNowPlaying(info));

@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld('api', {
     report: (info) => ipcRenderer.send('player:state', info),
     onCommand: (cb) => ipcRenderer.on('player:command', (_e, cmd) => cb(cmd)),
   },
+  autostart: {
+    get: () => ipcRenderer.invoke('autostart:get'),
+    set: (on) => ipcRenderer.invoke('autostart:set', !!on),
+  },
   tray: {
     setCloseToTray: (on) => ipcRenderer.send('tray:setCloseToTray', !!on),
     setLabels: (labels) => ipcRenderer.send('tray:labels', labels),

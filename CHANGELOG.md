@@ -4,6 +4,11 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.1
+
+### Added
+- A setting "Start with the system" (Settings > General): launches Glass Player when you sign in. It starts hidden in the tray when the tray icon is available.
+
 ## 0.2.0
 
 ### Added

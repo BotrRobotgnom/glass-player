@@ -34,6 +34,8 @@ window.__locales.en = {
   'settings.appearance': 'Appearance',
   'settings.updates': 'Updates',
   'settings.developer': 'Developer',
+  'settings.autostart': 'Start with the system',
+  'settings.autostartHint': 'Launch Glass Player when you sign in to your computer. It starts in the tray if the tray icon is available',
   'settings.closeToTray': 'Keep running in the tray',
   'settings.closeToTrayHint': 'Closing the window hides it to the tray icon. Off: closing the window quits the app',
   'tray.show': 'Show Glass Player',

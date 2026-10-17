@@ -995,6 +995,17 @@
   setInterval(reportToTray, 1000);
   reportToTray();
 
+  // Start with the system (the real state lives in the system, so ask it instead of remembering)
+  const autostart = $('#autostart');
+  window.api.autostart.get().then((s) => {
+    $('#rowAutostart').classList.toggle('hidden', !s.available);
+    autostart.checked = s.enabled;
+  });
+  autostart.addEventListener('change', async () => {
+    const s = await window.api.autostart.set(autostart.checked);
+    autostart.checked = s.enabled; // show what really happened
+  });
+
   const autoVideo = $('#autoVideo');
   autoVideo.checked = store.get('autoVideo', false);
   autoVideo.addEventListener('change', () => store.set('autoVideo', autoVideo.checked));
