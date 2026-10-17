@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld('trayApi', {
   command: (cmd) => ipcRenderer.send('tray:popupCommand', cmd),
   open: () => ipcRenderer.send('tray:popupOpen'),
   close: () => ipcRenderer.send('tray:popupClose'),
+  quit: () => ipcRenderer.send('tray:popupQuit'),
 });

@@ -26,12 +26,14 @@
     $('next').title = L.next || '';
     $('toggle').title = (s.playing ? L.pause : L.play) || '';
     $('open').title = L.show || '';
+    $('quit').title = L.quit || '';
   });
 
   $('prev').addEventListener('click', () => api.command('prev'));
   $('next').addEventListener('click', () => api.command('next'));
   $('toggle').addEventListener('click', () => api.command('toggle'));
   $('open').addEventListener('click', () => api.open());
+  $('quit').addEventListener('click', () => api.quit());
   $('bar').addEventListener('click', (e) => {
     if (!dur) return;
     const r = $('bar').getBoundingClientRect();

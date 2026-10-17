@@ -4,6 +4,11 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.2.6
+
+### Changed
+- The tray player now opens on a right click of the tray icon (instead of the left click) and replaces the old menu on Windows. A left click shows or hides the window. The player has Open window and Quit buttons in its corner.
+
 ## 0.2.5
 
 ### Fixed

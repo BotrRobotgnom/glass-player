@@ -31,6 +31,7 @@
     .ctrl .main svg { width: 22px; height: 22px; }
     .open { width: 28px; height: 28px; align-self: flex-start; }
     .open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .corner { display: flex; flex-direction: column; gap: 2px; align-self: flex-start; }
     .hidden { display: none; }
   </style>
 </head>
@@ -38,7 +39,10 @@
   <div class="top">
     <div id="cover" class="cover"></div>
     <div class="meta"><div id="title" class="title"></div><div id="artist" class="artist"></div></div>
+    <div class="corner">
     <button id="open" class="open" type="button"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+    <button id="quit" class="open" type="button"><svg viewBox="0 0 24 24"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
+    </div>
   </div>
   <div>
     <div id="bar" class="bar"><div id="fill" class="fill"></div></div>

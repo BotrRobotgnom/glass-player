@@ -65,6 +65,15 @@ export function showWindow() {
   rebuildMenu(true);
 }
 
+function toggleWindow() {
+  const win = getWindow();
+  if (!win || win.isDestroyed()) return;
+  if (win.isVisible() && !win.isMinimized() && win.isFocused()) {
+    win.hide();
+    rebuildMenu(true);
+  } else showWindow();
+}
+
 // ---------- The small player popup ----------
 const POPUP_W = 340;
 const POPUP_H = 178;
@@ -150,6 +159,7 @@ ipcMain.on('tray:popupOpen', () => {
   showWindow();
 });
 ipcMain.on('tray:popupClose', () => hidePopup());
+ipcMain.on('tray:popupQuit', () => app.quit());
 if (process.env.GP_TEST) ipcMain.on('tray:test', (_e, bounds) => togglePopup(bounds)); // lets automated tests open the popup
 
 function tooltip() {
@@ -179,7 +189,8 @@ function rebuildMenu(force = false) {
     { label: visible ? labels.hide : labels.show, click: () => (visible ? win.hide() : showWindow()) },
     { label: labels.quit, click: () => app.quit() },
   ];
-  tray.setContextMenu(Menu.buildFromTemplate(items));
+  // Windows / macOS: the right click opens the popup player instead of a menu. Linux tray icons only offer a menu.
+  if (process.platform === 'linux') tray.setContextMenu(Menu.buildFromTemplate(items));
 }
 
 // The page reports the current track about once a second
@@ -220,7 +231,8 @@ export function createTray({ window, onCommand, origin }) {
     if (icon.isEmpty()) throw new Error('the tray icon file is missing');
     tray = new Tray(icon);
     tray.setToolTip('Glass Player');
-    tray.on('click', (_e, bounds) => togglePopup(bounds)); // Windows and some Linux desktops; the menu covers the rest
+    tray.on('click', (_e, bounds) => (process.platform === 'linux' ? togglePopup(bounds) : toggleWindow())); // left click: show / hide the window
+    tray.on('right-click', (_e, bounds) => togglePopup(bounds)); // right click: the popup player
     tray.on('double-click', showWindow);
     rebuildMenu(true);
     logger.info('tray', 'Tray icon created');
