@@ -112,7 +112,7 @@ function createStore(fileName, defaults) {
 const historyStore = createStore('history.json', () => ({ tracks: {}, log: [] }));
 const playlistStore = createStore('playlists.json', () => ({ playlists: [] }));
 const reactionStore = createStore('reactions.json', () => ({ items: {} }));
-const blockedStore = createStore('blocked.json', () => ({ ids: {} }));
+const blockedStore = createStore('blocked.json', () => ({ ids: {}, ok: {} }));
 
 export function flushLibrary() {
   historyStore.save();
@@ -171,8 +171,25 @@ export function markBlocked(videoId) {
   const b = blockedStore.load();
   if (!videoId || b.ids[videoId]) return;
   b.ids[videoId] = Date.now();
+  delete b.ok[videoId];
   blockedStore.changed();
 }
+// videos checked and found embeddable are remembered for a while, so Home and search don't re-check them
+const OK_TTL = 30 * 24 * 60 * 60 * 1000;
+export function markEmbeddableOk(videoId) {
+  const b = blockedStore.load();
+  if (!videoId || b.ids[videoId]) return;
+  b.ok[videoId] = Date.now();
+  const keys = Object.keys(b.ok);
+  if (keys.length > 4000) {
+    for (const k of keys.sort((x, y) => b.ok[x] - b.ok[y]).slice(0, 2000)) delete b.ok[k];
+  }
+  blockedStore.changed();
+}
+export const isKnownEmbeddable = (videoId) => {
+  const at = blockedStore.load().ok[videoId];
+  return !!at && Date.now() - at < OK_TTL;
+};
 export const isKnownBlocked = (videoId) => !!blockedStore.load().ids[videoId];
 
 // ---------- History ----------

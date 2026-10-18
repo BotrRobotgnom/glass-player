@@ -365,6 +365,7 @@
 
   function renderResults() {
     const box = els.results;
+    const scroll = box.scrollTop;
     box.replaceChildren();
     const list = flatResults();
     const coll = state.results.collections || { artists: [], playlists: [] };
@@ -396,6 +397,31 @@
     if (playlists.length) {
       box.appendChild(groupTitle(t('results.playlists')));
       for (const r of playlists) box.appendChild(window.GP.entityRow(r));
+    }
+    box.scrollTop = scroll;
+  }
+
+  // Results appear at once; YouTube videos that can't be embedded are found out in small batches and greyed as the answers arrive
+  async function verifyEmbeds(id) {
+    const vids = [];
+    for (const item of state.results.merged || []) for (const v of [item, item.alt]) if (v && v.source === 'youtube' && v.embeddable === undefined) vids.push(v);
+    for (let i = 0; i < vids.length; i += 4) {
+      if (id !== searchId) return; // a newer search replaced these results
+      const batch = vids.slice(i, i + 4);
+      let verdict = {};
+      try {
+        verdict = await window.api.checkEmbeddable(batch.map((v) => v.id));
+      } catch {
+        return;
+      }
+      if (id !== searchId) return;
+      let changed = false;
+      for (const v of batch) {
+        if (verdict[v.id] === undefined) continue;
+        if (v.embeddable !== verdict[v.id]) changed = changed || verdict[v.id] === false;
+        v.embeddable = verdict[v.id];
+      }
+      if (changed) renderResults();
     }
   }
 
@@ -498,12 +524,17 @@
     playTrack(track);
     if (!state.autoSimilar) return;
     const token = state.token;
+    let done;
+    const mine = new Promise((r) => (done = r));
+    state.prefill = mine;
     let found = [];
     try {
       found = await window.api.recommend.similar(track, [keyOf(track)], SIMILAR_BATCH);
     } catch (err) {
       log('warn', 'Similar tracks failed', { error: String(err.message || err) });
     }
+    if (state.prefill === mine) state.prefill = null;
+    done();
     if (token !== state.token || !found.length) return; // the user moved on, or nothing was found
     // only if the queue is still the one we made (the user may have queued something meanwhile)
     state.queue.push(...found);
@@ -512,10 +543,10 @@
   }
   const playFromResults = (track) => playOne(track);
 
-  function playIndex(i) {
+  function playIndex(i, auto = false) {
     if (i < 0 || i >= state.queue.length) return;
     state.index = i;
-    playTrack(state.queue[i]);
+    playTrack(state.queue[i], auto);
   }
 
   // ---------- Listening history ----------
@@ -550,7 +581,7 @@
   // ---------- Playback ----------
   const timeout = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
-  async function playTrack(track) {
+  async function playTrack(track, auto = false) {
     const token = ++state.token;
     resetListening();
     // a search result may carry the same track from the other service
@@ -565,7 +596,9 @@
     let shown = track;
 
     // Priority: look for the same track on the preferred service (unless both versions are already known)
-    const want = state.priority === 'youtube' && sc && !yt ? 'youtube' : state.priority === 'soundcloud' && yt && !sc ? 'soundcloud' : null;
+    let want = state.priority === 'youtube' && sc && !yt ? 'youtube' : state.priority === 'soundcloud' && yt && !sc ? 'soundcloud' : null;
+    // a YouTube video that can't be embedded: its SoundCloud twin is the only way to play it
+    if (!want && yt && yt.embeddable === false && !sc) want = 'soundcloud';
     if (want) {
       setStatus(t('np.looking'));
       renderNow({ shown: track, yt, sc });
@@ -584,6 +617,14 @@
       else if (state.priority === 'soundcloud') shown = sc;
     }
 
+    // nothing playable: say so instead of failing inside the player. A list moves on by itself; a picked track doesn't
+    if (shown.source === 'youtube' && shown.embeddable === false) {
+      log('info', 'Not playable here (embedding is disabled)', { title: shown.title });
+      setStatus('');
+      toast(t('row.blocked'));
+      if (auto) next(true);
+      return;
+    }
     state.now = { shown, yt, sc, official: !!(want === 'youtube' && yt && yt !== track) };
     startEngine(shown);
     renderNow(state.now);
@@ -663,6 +704,24 @@
       renderNow(state.now);
       return;
     }
+    // A YouTube video the player refuses to embed: look for the same track on SoundCloud before giving up
+    if (n && n.shown.source === 'youtube' && !n.sc && !n.triedSC && (code === 101 || code === 150)) {
+      const token = ++state.token;
+      state.now = { ...n, triedSC: true };
+      setStatus(t('np.looking'));
+      window.api.findOfficial(n.shown, 'soundcloud').then((found) => {
+        if (token !== state.token) return;
+        setStatus('');
+        if (found && found.track) {
+          log('info', 'YouTube refused to embed, using the SoundCloud version');
+          toast(t('play.embedBlocked'));
+          state.now = { shown: found.track, yt: n.shown, sc: found.track, ytBlocked: true, triedSC: true };
+          startEngine(found.track);
+          renderNow(state.now);
+        } else failSkip(code, n);
+      });
+      return;
+    }
     // A SoundCloud track that won't play: try the same track on YouTube Music once
     if (n && n.shown.source === 'soundcloud' && !n.yt && !n.triedYT && state.priority !== 'none') {
       const token = ++state.token;
@@ -719,7 +778,7 @@
     state.queue.push(...found);
     log('info', `Queue ended: added ${found.length} similar track(s)`, { after: seed.title });
     renderQueue();
-    playIndex(first);
+    playIndex(first, true);
   }
 
   function next(auto = false) {
@@ -741,6 +800,17 @@
       if (i >= q.length) {
         // the queue has ended: keep going with similar tracks (unless "repeat all" is on)
         if (state.repeat !== 'all' && state.autoSimilar && state.now && state.index === q.length - 1) {
+          // the first batch of recommendations is still being fetched: wait for it instead of asking twice
+          if (state.prefill) {
+            const wait = state.prefill;
+            const tok = state.token;
+            wait.then(() => {
+              if (tok !== state.token) return;
+              if (state.index + 1 < state.queue.length) playIndex(state.index + 1, auto);
+              else continueWithSimilar();
+            });
+            return;
+          }
           continueWithSimilar();
           return;
         }
@@ -752,7 +822,7 @@
         }
       }
     }
-    playIndex(i);
+    playIndex(i, auto);
   }
 
   function prev() {
@@ -904,6 +974,7 @@
       if (id !== searchId) return; // a newer search has started: drop this answer
       state.results = { merged: res.merged || [], collections: res.collections || { artists: [], playlists: [] } };
       renderResults();
+      verifyEmbeds(id);
       for (const [src, msg] of Object.entries(res.errors || {})) {
         toast(`${sourceLabel(src)}: ${msg}`);
       }

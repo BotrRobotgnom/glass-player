@@ -4,6 +4,15 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.3.4
+
+### Fixed
+- YouTube videos that can't be embedded (error 150) were still shown on Home and in search, and were found out only after trying to play them. They are now detected with YouTube's own "playable in embed" flag (the one the player obeys), the answers are remembered on disk, and Home never shows them.
+- Search shows its results at once, then checks the YouTube videos in small batches and greys out the ones that can't be played as the answers arrive (no need to leave and come back).
+- Clicking a track that can't be embedded no longer jumps into recommendations: the app looks for its SoundCloud twin and plays that, otherwise it says the track can't be played here and leaves the current music alone.
+- When a picked track and its automatic recommendations were fetched at the same time, the queue could get two batches. It now waits for the first one.
+- The "Artists" and "Playlists and albums" blocks in search sometimes failed for YouTube Music; each kind is now searched separately.
+
 ## 0.3.3
 
 ### Added

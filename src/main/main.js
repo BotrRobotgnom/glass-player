@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './server.js';
 import {
-  searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable, searchYouTubeCollections, getYouTubeArtist, getYouTubePlaylist,
+  searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable, isEmbeddable, knownEmbeddable, searchYouTubeCollections, getYouTubeArtist, getYouTubePlaylist,
   findYouTubeArtist, findYouTubeAlbum,
 } from './youtube.js';
 import {
@@ -215,6 +215,18 @@ ipcMain.handle('recommend:similar', (_e, track, exclude, count) =>
 ipcMain.handle('recommend:get', (_e, force) => getHome(!!force));
 
 // Library: history and playlists
+// Embeddable or not, for a few videos at a time (the interface asks in small batches and updates rows as answers arrive)
+ipcMain.handle('embed:check', async (_e, ids) => {
+  const list = (Array.isArray(ids) ? ids : []).map(String).slice(0, 12);
+  const out = {};
+  if (process.env.GP_TEST) {
+    await new Promise((r) => setTimeout(r, 300));
+    for (const id of list) out[id] = !id.startsWith('BLK');
+    return out;
+  }
+  await Promise.all(list.map(async (id) => (out[id] = await isEmbeddable(id))));
+  return out;
+});
 ipcMain.handle('reactions:set', (_e, track, value, pair) => {
   const v = library.setReaction(track, Number(value) || 0, pair);
   resetCache();
@@ -306,13 +318,21 @@ ipcMain.handle('suggest', async (_e, query) => {
 ipcMain.handle('search', async (_e, { query, sources }) => {
   const q = String(query || '').trim();
   if (!q) return { youtube: [], soundcloud: [], merged: [], errors: {} };
+  if (process.env.GP_TEST && q === '__test') {
+    const y = (id, n) => ({ id, source: 'youtube', title: `Song ${n}`, artist: 'Artist', durationSec: 100, cover: '' });
+    return { youtube: [], soundcloud: [], collections: { artists: [], playlists: [] }, errors: {}, merged: [y('OK1', 1), y('BLK1', 2), y('BLK2', 3), y('OK2', 4), y('OK3', 5)] };
+  }
   const want = new Set(sources || ['youtube', 'soundcloud']);
   const out = { youtube: [], soundcloud: [], collections: { artists: [], playlists: [] }, errors: {} };
   const started = Date.now();
   logger.debug('search', `Search: "${q}"`, { sources: [...want] });
 
   const done = async () => {
-    await markEmbeddable(out.youtube);
+    // what is already known is applied at once; the rest is checked afterwards ('embed:check') so results appear fast
+    for (const tr of out.youtube) {
+      const k = knownEmbeddable(tr.id);
+      if (k !== undefined) tr.embeddable = k;
+    }
     out.merged = mergeResults(q, out.youtube, out.soundcloud);
     const ms = Date.now() - started;
     const failed = Object.keys(out.errors);

@@ -1,4 +1,4 @@
-import { isKnownBlocked } from './library.js';
+import { isKnownBlocked, isKnownEmbeddable, markBlocked, markEmbeddableOk } from './library.js';
 import { Innertube } from 'youtubei.js';
 import * as logger from './logger.js';
 
@@ -199,34 +199,83 @@ export async function getYouTubeTrack(videoId) {
   };
 }
 
-// The IFrame player refuses videos whose owner disabled embedding (error 150/101).
-// The oEmbed endpoint answers 401 for exactly those, so we can know before trying to play.
+// The IFrame player refuses videos whose owner disabled embedding (error 150/101). We want to know before playing.
+// 1) YouTube's own player data says `playableInEmbed` (the same flag the iframe obeys); 2) the oEmbed endpoint
+// answers 401 for some of them; 3) a video the player already refused is remembered on disk.
 // Unknown (network trouble etc.) counts as embeddable: the player's own error handling still applies.
 const embedCache = new Map();
 
-export async function isEmbeddable(videoId) {
-  if (isKnownBlocked(videoId)) return false; // the player itself refused it earlier
-  if (embedCache.has(videoId)) return embedCache.get(videoId);
-  let ok = true;
+// at most a few checks at a time: Home and search can ask about dozens of videos at once
+let activeChecks = 0;
+const waiting = [];
+async function limited(fn) {
+  if (activeChecks >= 6) await new Promise((resolve) => waiting.push(resolve));
+  activeChecks++;
+  try {
+    return await fn();
+  } finally {
+    activeChecks--;
+    const next = waiting.shift();
+    if (next) next();
+  }
+}
+
+// true / false when YouTube says so, null when the answer is missing
+async function playerSaysEmbeddable(videoId) {
+  try {
+    const yt = await getYT();
+    const res = await yt.actions.execute('/player', { videoId, racyCheckOk: true, contentCheckOk: true, parse: false });
+    const flag = res?.data?.playabilityStatus?.playableInEmbed;
+    return typeof flag === 'boolean' ? flag : null;
+  } catch (err) {
+    logger.debug('youtube', `Player check failed for ${videoId}`, { error: err.message });
+    return null;
+  }
+}
+
+async function oembedSaysEmbeddable(videoId) {
   try {
     const url = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (res.status === 401 || res.status === 403 || res.status === 404) {
-      ok = false;
-      logger.debug('youtube', `Not embeddable: ${videoId}`, { status: res.status });
-    }
-    embedCache.set(videoId, ok);
+    if (res.status === 401 || res.status === 403 || res.status === 404) return false;
+    return res.ok ? true : null;
   } catch (err) {
     logger.debug('youtube', `Embed check failed for ${videoId}`, { error: err.message });
+    return null;
   }
-  return ok;
+}
+
+// What we already know without asking: true / false / undefined
+export function knownEmbeddable(videoId) {
+  if (isKnownBlocked(videoId)) return false;
+  if (embedCache.has(videoId)) return embedCache.get(videoId);
+  if (isKnownEmbeddable(videoId)) return true;
+  return undefined;
+}
+
+export async function isEmbeddable(videoId) {
+  const known = knownEmbeddable(videoId);
+  if (known !== undefined) return known;
+  return limited(async () => {
+    let verdict = await playerSaysEmbeddable(videoId);
+    if (verdict === null) verdict = await oembedSaysEmbeddable(videoId);
+    const ok = verdict !== false;
+    if (verdict !== null) {
+      embedCache.set(videoId, ok);
+      if (ok) markEmbeddableOk(videoId);
+      else {
+        markBlocked(videoId);
+        logger.debug('youtube', `Not embeddable: ${videoId}`);
+      }
+    }
+    return ok;
+  });
 }
 
 export async function markEmbeddable(tracks) {
   await Promise.all(tracks.map(async (tr) => (tr.embeddable = await isEmbeddable(tr.id))));
   return tracks;
 }
-
 
 // ---------- Artists, albums and playlists ----------
 // A "reference" is a small card-sized description of a page we can open: { source, kind, id, title, subtitle, cover }
@@ -256,12 +305,21 @@ function toRef(item) {
   };
 }
 
-// artists, albums and playlists that match a search
+// artists, albums and playlists that match a search (one filtered search each: a failure in one does not spoil the others)
 export async function searchYouTubeCollections(query, limit = 5) {
   const yt = await getYT();
-  const res = await yt.music.search(query);
-  const take = (shelf) => [...(shelf?.contents || [])].map(toRef).filter(Boolean).slice(0, limit);
-  return { artists: take(res.artists), playlists: [...take(res.playlists), ...take(res.albums)] };
+  const one = async (type) => {
+    try {
+      const res = await yt.music.search(query, { type });
+      const shelf = res[type === 'artist' ? 'artists' : type === 'album' ? 'albums' : 'playlists'] || res.contents?.find((c) => c?.contents);
+      return [...(shelf?.contents || [])].map(toRef).filter(Boolean).slice(0, limit);
+    } catch (err) {
+      logger.debug('youtube', `Collections search (${type}) failed`, { error: String(err.message || err) });
+      return [];
+    }
+  };
+  const [artists, playlists, albums] = await Promise.all([one('artist'), one('playlist'), one('album')]);
+  return { artists, playlists: [...playlists, ...albums] };
 }
 
 function listTrack(item, extra = {}) {
