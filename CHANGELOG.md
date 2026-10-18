@@ -4,6 +4,11 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.3.2
+
+### Fixed
+- Playing a single track from Home, from search results or from an artist's song list no longer queues the whole list. Only that track is queued, followed by 5 recommended tracks; when the queue ends, 5 more are added, and so on. Albums, playlists and the Liked list still queue everything, as before.
+
 ## 0.3.1
 
 ### Added

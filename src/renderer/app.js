@@ -476,7 +476,28 @@
     renderQueue();
     playTrack(track);
   }
-  const playFromResults = (track) => playFrom(flatResults(), track);
+  // One picked track (from Home, search results, an artist's songs): the queue is just that track, then a few
+  // recommendations are added behind it. A whole list is queued only by explicit playlist actions (playFrom).
+  async function playOne(track) {
+    state.queue = [track];
+    state.index = 0;
+    renderQueue();
+    playTrack(track);
+    if (!state.autoSimilar) return;
+    const token = state.token;
+    let found = [];
+    try {
+      found = await window.api.recommend.similar(track, [keyOf(track)], SIMILAR_BATCH);
+    } catch (err) {
+      log('warn', 'Similar tracks failed', { error: String(err.message || err) });
+    }
+    if (token !== state.token || !found.length) return; // the user moved on, or nothing was found
+    // only if the queue is still the one we made (the user may have queued something meanwhile)
+    state.queue.push(...found);
+    log('info', `Added ${found.length} similar track(s) after "${track.title}"`);
+    renderQueue();
+  }
+  const playFromResults = (track) => playOne(track);
 
   function playIndex(i) {
     if (i < 0 || i >= state.queue.length) return;
@@ -659,6 +680,7 @@
 
   // Asks for tracks similar to the one that just played, appends them and plays on. Repeats at every end of the queue.
   let similarBusy = false;
+  const SIMILAR_BATCH = 5; // how many recommended tracks are added at a time
   async function continueWithSimilar() {
     if (similarBusy) return;
     similarBusy = true;
@@ -667,7 +689,7 @@
     setStatus(t('np.findingSimilar'));
     let found = [];
     try {
-      found = await window.api.recommend.similar(seed, state.queue.map((x) => x.source + ':' + x.id));
+      found = await window.api.recommend.similar(seed, state.queue.map((x) => x.source + ':' + x.id), SIMILAR_BATCH);
     } catch (err) {
       log('warn', 'Similar tracks failed', { error: String(err.message || err) });
     }
@@ -892,7 +914,7 @@
 
   // What library.js (history and playlists) needs from the player
   window.GP = {
-    makeRow, groupTitle, emptyMessage, icon, toast, log, store, showTab, addToQueue, playFrom, sameTrack,
+    makeRow, groupTitle, emptyMessage, icon, toast, log, store, showTab, addToQueue, playFrom, playOne, sameTrack,
     playlistAction, markCurrentRows, reactionOf,
     reloadReactions: async () => {
       state.reactions = (await window.api.reactions.map()) || {};

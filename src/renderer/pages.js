@@ -171,16 +171,17 @@
   }
 
   const queueAction = (track) => ({ icon: 'i-plus', title: t('row.addToQueue'), onClick: () => GP.addToQueue(track) });
-  const trackRows = (tracks, shownTracks = tracks) =>
+  // asList: an album / playlist plays on through its tracks; an artist's song list plays just the picked track
+  const trackRows = (tracks, shownTracks = tracks, asList = false) =>
     shownTracks.map((track) =>
-      GP.makeRow(track, { onPlay: () => GP.playFrom(tracks, track), actions: [queueAction(track), GP.playlistAction(track)] }),
+      GP.makeRow(track, { onPlay: () => (asList ? GP.playFrom(tracks, track) : GP.playOne(track)), actions: [queueAction(track), GP.playlistAction(track)] }),
     );
 
   // a long list shows its first rows and a button for the rest
-  function longList(tracks, limit) {
+  function longList(tracks, limit, asList = false) {
     const holder = el('div', 'ent-rows');
     const fill = (n) => {
-      holder.replaceChildren(...trackRows(tracks, tracks.slice(0, n)));
+      holder.replaceChildren(...trackRows(tracks, tracks.slice(0, n), asList));
       if (tracks.length > n) {
         const more = el('button', 'swap more', t('page.showAll', { count: tracks.length }));
         more.type = 'button';
@@ -211,7 +212,7 @@
       const saveBtn = button('i-list-plus', t('page.save'), () => saveAsPlaylist(page, saveBtn));
       saveBtn.disabled = !tracks.length;
       parts.push(head({ ...page, subtitle: [page.subtitle, plural(tracks.length)].filter(Boolean).join(' · ') }, [...playButtons(tracks), saveBtn]));
-      parts.push(...(tracks.length ? [longList(tracks, 200)] : [GP.emptyMessage(t('page.empty'))]));
+      parts.push(...(tracks.length ? [longList(tracks, 200, true)] : [GP.emptyMessage(t('page.empty'))]));
     }
     box.replaceChildren(...parts);
     GP.markCurrentRows();

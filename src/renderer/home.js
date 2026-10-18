@@ -64,7 +64,7 @@
     }
     art.append(acts);
     c.append(art, el('div', 'title', track.title), el('div', 'sub', track.artist));
-    c.addEventListener('click', () => GP.playFrom(list, track));
+    c.addEventListener('click', () => GP.playOne(track));
     return c;
   }
 

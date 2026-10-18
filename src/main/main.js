@@ -206,8 +206,8 @@ async function createWindow() {
 registerDebugIpc();
 
 // Home: recommendations built from the listening history
-ipcMain.handle('recommend:similar', (_e, track, exclude) =>
-  getSimilar(track, Array.isArray(exclude) ? exclude : []).catch((err) => {
+ipcMain.handle('recommend:similar', (_e, track, exclude, count) =>
+  getSimilar(track, Array.isArray(exclude) ? exclude : [], count).catch((err) => {
     logger.warn('recommend', 'Similar tracks failed', { error: String(err.message || err) });
     return [];
   }),
