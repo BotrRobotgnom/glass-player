@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { startServer } from './server.js';
 import {
   searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable, searchYouTubeCollections, getYouTubeArtist, getYouTubePlaylist,
-  findYouTubeArtist,
+  findYouTubeArtist, findYouTubeAlbum,
 } from './youtube.js';
 import {
   searchSoundCloud, resolveSoundCloud, isSoundCloudUrl, searchSoundCloudCollections, getSoundCloudArtist, getSoundCloudPlaylist, findSoundCloudArtist,
@@ -404,6 +404,15 @@ ipcMain.handle('page:findArtist', async (_e, source, name) => {
     return source === 'soundcloud' ? await findSoundCloudArtist(String(name)) : await findYouTubeArtist(String(name));
   } catch (err) {
     logger.warn('page', 'Artist lookup failed', { error: String(err.message || err) });
+    return null;
+  }
+});
+
+ipcMain.handle('page:findAlbum', async (_e, name, artist) => {
+  try {
+    return await findYouTubeAlbum(String(name), String(artist || ''));
+  } catch (err) {
+    logger.warn('page', 'Album lookup failed', { error: String(err.message || err) });
     return null;
   }
 });

@@ -4,6 +4,11 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.3.3
+
+### Added
+- The album name under a track (lists and the now-playing panel) opens the album page, like the artist name does. Older entries without a stored album id look the album up by name.
+
 ## 0.3.2
 
 ### Fixed

@@ -235,6 +235,18 @@
     else GP.toast(t('page.noArtist'));
   };
 
+  // The album behind a track (YouTube Music only): by stored id, or looked up by name
+  GP.openAlbumOf = async (track) => {
+    if (!track || track.source !== 'youtube' || !track.album) return;
+    if (track.albumId) {
+      open({ source: 'youtube', kind: 'album', id: track.albumId, title: track.album });
+      return;
+    }
+    const ref = await api.page.findAlbum(track.album, track.artist);
+    if (ref) open(ref);
+    else GP.toast(t('page.noAlbum'));
+  };
+
   // A row for an artist / album / playlist in search results. Playlists and albums can be saved right from the row.
   GP.entityRow = (ref) => {
     const row = el('div', 'row entity');

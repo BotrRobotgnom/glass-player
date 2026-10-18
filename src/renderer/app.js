@@ -164,7 +164,20 @@
   function artistParts(track) {
     const out = [];
     if (track.artist) out.push(artistLink(track));
-    if (track.album) out.push(document.createTextNode((track.artist ? ' · ' : '') + track.album));
+    if (track.album) {
+      if (track.artist) out.push(document.createTextNode(' · '));
+      if (track.source === 'youtube') {
+        const a = document.createElement('span');
+        a.className = 'link';
+        a.textContent = track.album;
+        a.title = t('page.openAlbum');
+        a.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.GP.openAlbumOf(track);
+        });
+        out.push(a);
+      } else out.push(document.createTextNode(track.album));
+    }
     return out;
   }
 

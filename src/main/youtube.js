@@ -43,6 +43,7 @@ function toTrack(item) {
     artist: (item.artists || item.authors || []).map((a) => a.name).filter(Boolean).join(', '),
     artistId: firstArtistId(item),
     album: item.album?.name || '',
+    albumId: String(item.album?.id || ''),
     durationSec: item.duration?.seconds || 0,
     cover: bestThumb(item.thumbnails),
     url: `https://music.youtube.com/watch?v=${item.id}`,
@@ -95,6 +96,7 @@ function panelTrack(item) {
     artist: artists || String(v.author || '').replace(/ - Topic$/, ''),
     artistId: firstArtistId(v),
     album: v.album?.name || '',
+    albumId: String(v.album?.id || ''),
     durationSec: v.duration?.seconds || 0,
     cover: bestThumb(v.thumbnail),
     url: `https://music.youtube.com/watch?v=${id}`,
@@ -125,6 +127,7 @@ function shelfTrack(item) {
     artist: names.join(', ') || String(item.subtitle?.toString?.() || '').split('•')[1]?.trim() || '',
     artistId: firstArtistId(item),
     album: item.album?.name || '',
+    albumId: String(item.album?.id || ''),
     durationSec: item.duration?.seconds || 0,
     cover: bestThumb(list),
     url: `https://music.youtube.com/watch?v=${item.id}`,
@@ -347,4 +350,13 @@ export async function findYouTubeArtist(name) {
   const res = await yt.music.search(name, { type: 'artist' });
   const first = [...(res.artists?.contents || res.contents?.find((c) => c?.contents)?.contents || [])].map(toRef).find(Boolean);
   return first || null;
+}
+
+// An album page for a name only (tracks saved before album ids were stored)
+export async function findYouTubeAlbum(name, artist = '') {
+  const yt = await getYT();
+  const res = await yt.music.search(`${name} ${artist}`.trim(), { type: 'album' });
+  const items = [...(res.albums?.contents || res.contents?.find((c) => c?.contents)?.contents || [])].map(toRef).filter(Boolean);
+  const norm = (x) => String(x).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return items.find((r) => norm(r.title) === norm(name)) || items[0] || null;
 }

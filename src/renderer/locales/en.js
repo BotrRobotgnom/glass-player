@@ -113,6 +113,8 @@ window.__locales.en = {
   'page.saveRow': 'Save to my playlists',
   'page.saved': 'Saved "{name}" ({count} tracks)',
   'page.saveFailed': "Couldn't save the playlist",
+  'page.openAlbum': 'Open the album',
+  'page.noAlbum': "Couldn't find this album",
   'page.openArtist': 'Open the artist page',
   'page.noArtist': "Couldn't find this artist's page",
   'react.like': 'Like',

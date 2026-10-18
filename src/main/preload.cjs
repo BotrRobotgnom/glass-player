@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('api', {
   page: {
     artist: (source, id) => ipcRenderer.invoke('page:artist', source, id),
     playlist: (source, id, kind) => ipcRenderer.invoke('page:playlist', source, id, kind),
+    findAlbum: (name, artist) => ipcRenderer.invoke('page:findAlbum', name, artist),
     findArtist: (source, name) => ipcRenderer.invoke('page:findArtist', source, name),
   },
   markBlocked: (videoId) => ipcRenderer.invoke('blocked:mark', videoId),
