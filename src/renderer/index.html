@@ -40,6 +40,8 @@
     <symbol id="i-p-yt" viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/></symbol>
     <symbol id="i-p-sc" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 18a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 9.5a4.2 4.2 0 0 1 .5 8.5z"/></symbol>
     <symbol id="i-p-none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="m6.5 17.5 11-11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-like" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 10v10H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM7 10l4-7a2 2 0 0 1 2 2v4h6a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.8 20H7"/></symbol>
+    <symbol id="i-dislike" viewBox="0 0 24 24"><g transform="rotate(180 12 12)"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 10v10H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM7 10l4-7a2 2 0 0 1 2 2v4h6a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.8 20H7"/></g></symbol>
     <symbol id="i-swap" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></symbol>
   </svg>
 
@@ -175,12 +177,14 @@
           <button class="tab" data-tab="results" type="button" data-i18n="tabs.results">Results</button>
           <button class="tab" data-tab="queue" type="button"><span data-i18n="tabs.queue">Queue</span> <span id="queueCount" class="count"></span></button>
           <button class="tab" data-tab="playlists" type="button" data-i18n="tabs.playlists">Playlists</button>
+          <button class="tab" data-tab="liked" type="button" data-i18n="tabs.liked">Liked</button>
           <button class="tab" data-tab="history" type="button" data-i18n="tabs.history">History</button>
         </div>
         <div id="home" class="list"></div>
         <div id="results" class="list hidden"></div>
         <div id="queue" class="list hidden"></div>
         <div id="playlists" class="list hidden"></div>
+        <div id="liked" class="list hidden"></div>
         <div id="history" class="list hidden"></div>
       </section>
 
@@ -195,8 +199,14 @@
           <h2 id="npTitle" data-i18n="np.idleTitle">Nothing playing</h2>
           <p id="npArtist" data-i18n="np.idleSubtitle">Find a track or paste a link</p>
           <div class="np-badges">
-            <span id="npSource" class="badge hidden"></span>
+            <span id="npYT" class="badge plat yt hidden"><svg><use href="#i-p-yt"/></svg>YouTube</span>
+            <span id="npSC" class="badge plat sc hidden"><svg><use href="#i-p-sc"/></svg>SoundCloud</span>
+            <span id="npBlockedMark" class="badge plat off hidden"><svg><use href="#i-p-none"/></svg></span>
             <span id="npOfficial" class="badge official hidden" data-i18n="np.official">Official version</span>
+            <div class="np-react">
+              <button id="btnLike" class="swap react" type="button" title="Like" data-i18n-title="react.like"><svg><use href="#i-like" /></svg></button>
+              <button id="btnDislike" class="swap react" type="button" title="Dislike" data-i18n-title="react.dislike"><svg><use href="#i-dislike" /></svg></button>
+            </div>
           </div>
           <button id="btnNpPlaylist" class="swap hidden" type="button"><svg><use href="#i-list-plus" /></svg><span data-i18n="row.addToPlaylist">Add to playlist</span></button>
           <button id="btnSwap" class="swap hidden" type="button"><svg><use href="#i-swap" /></svg><span></span></button>

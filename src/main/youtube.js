@@ -1,3 +1,4 @@
+import { isKnownBlocked } from './library.js';
 import { Innertube } from 'youtubei.js';
 import * as logger from './logger.js';
 
@@ -191,6 +192,7 @@ export async function getYouTubeTrack(videoId) {
 const embedCache = new Map();
 
 export async function isEmbeddable(videoId) {
+  if (isKnownBlocked(videoId)) return false; // the player itself refused it earlier
   if (embedCache.has(videoId)) return embedCache.get(videoId);
   let ok = true;
   try {

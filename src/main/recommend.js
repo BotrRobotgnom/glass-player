@@ -25,6 +25,8 @@ function pickSeeds() {
     seen.add(k);
     seeds.push({ track: e.track, weight });
   };
+  // liked tracks are the strongest hint of taste
+  library.getReactions('liked', 3).forEach((e) => add(e, 2.5));
   top.slice(0, 5).forEach((e) => add(e, 1 + Math.log2(1 + e.plays)));
   recent.forEach((e) => add(e, 1));
   return seeds;
@@ -69,7 +71,7 @@ async function build(seeds) {
       logger.warn('recommend', `No suggestions for "${seeds[i].track.title}"`, { error: String(r.reason?.message || r.reason) });
     }
   });
-  const exclude = new Set([...heard, ...seeds.map((s) => key(s.track))]);
+  const exclude = new Set([...heard, ...library.dislikedKeys(), ...seeds.map((s) => key(s.track))]);
   const sections = [];
 
   const yt = merge(ok.filter((l) => l.seed.track.source === 'youtube'), exclude);
@@ -111,6 +113,11 @@ async function build(seeds) {
   return { seeds: seeds.length, sections, errors: [...new Set(errors)] };
 }
 
+// a like or dislike changes what should be offered: forget the cached Home
+export function resetCache() {
+  cache = null;
+}
+
 export async function getHome(force = false) {
   const seeds = pickSeeds();
   const sig = seeds.map((s) => key(s.track)).join('|');
@@ -133,6 +140,7 @@ export async function getSimilar(track, exclude = []) {
   if (!track || !track.id || (track.source !== 'youtube' && track.source !== 'soundcloud')) return [];
   const skip = new Set([...exclude].map(String).slice(-500));
   skip.add(key(track));
+  for (const k of library.dislikedKeys()) skip.add(k);
   let list = [];
   try {
     list = track.source === 'youtube' ? await getRelatedYouTube(track.id, 30) : await relatedSoundCloud(track.id, 30);

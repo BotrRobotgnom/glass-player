@@ -66,3 +66,46 @@ export function pickBest(source, candidates, threshold = 0.6) {
   }
   return best && best.score >= threshold ? best : null;
 }
+
+// ---------- One search list for both services ----------
+// How well a result fits the query: share of the query's words found in "artist title", plus a bonus for ranking high at its own service.
+function relevance(query, track, index) {
+  const q = [...tokens(query)];
+  const hay = tokens(`${track.artist || ''} ${track.title || ''}`);
+  const covered = q.length ? q.filter((w) => hay.has(w) || [...hay].some((h) => h.startsWith(w))).length / q.length : 0;
+  return covered * 0.75 + 0.25 / (1 + index * 0.5);
+}
+
+// Merges YouTube Music and SoundCloud results. The same song found on both becomes one item with `alt` = the other
+// service's version. Items are sorted by closeness to the query. Playable-on-YouTube versions lead the pair.
+export function mergeResults(query, youtube = [], soundcloud = []) {
+  const items = [];
+  const usedSc = new Set();
+  youtube.forEach((yt, i) => {
+    let best = null;
+    soundcloud.forEach((sc, j) => {
+      if (usedSc.has(j)) return;
+      const score = scoreCandidate(sc, yt);
+      if (score >= 0.72 && (!best || score > best.score)) best = { j, score };
+    });
+    let track = yt;
+    let alt = null;
+    let rel = relevance(query, yt, i);
+    if (best) {
+      usedSc.add(best.j);
+      const sc = soundcloud[best.j];
+      alt = sc;
+      rel = Math.max(rel, relevance(query, sc, best.j)) + 0.1; // present on both: a slightly stronger result
+      // an unplayable YouTube version should not lead
+      if (yt.embeddable === false) {
+        track = sc;
+        alt = yt;
+      }
+    }
+    items.push({ track, alt, rel });
+  });
+  soundcloud.forEach((sc, j) => {
+    if (!usedSc.has(j)) items.push({ track: sc, alt: null, rel: relevance(query, sc, j) });
+  });
+  return items.sort((a, b) => b.rel - a.rel).map(({ track, alt }) => (alt ? { ...track, alt } : { ...track }));
+}

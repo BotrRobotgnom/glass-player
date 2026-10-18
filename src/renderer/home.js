@@ -81,7 +81,9 @@
       return b;
     };
     const track = el('div', 'shelf-track');
-    for (const tr of s.tracks) track.append(card(tr, s.tracks));
+    // never show what can't be played here or what was disliked
+    const shown = s.tracks.filter((tr) => tr.embeddable !== false && GP.reactionOf(tr) >= 0);
+    for (const tr of shown) track.append(card(tr, shown));
     // drag with the left mouse button to scroll sideways; a real drag must not click the card under the cursor
     let drag = null;
     track.addEventListener('pointerdown', (e) => {

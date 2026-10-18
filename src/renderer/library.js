@@ -118,6 +118,55 @@
     histBox.scrollTop = scroll;
   }
 
+  // ---------- Liked / disliked ----------
+  const likedBox = $('#liked');
+  let likedView = GP.store.get('likedView', 'liked');
+  if (!['liked', 'disliked'].includes(likedView)) likedView = 'liked';
+
+  async function renderLiked() {
+    const scroll = likedBox.scrollTop;
+    let items = [];
+    try {
+      items = await api.reactions.get(likedView);
+    } catch (err) {
+      GP.log('error', 'Reading likes failed', { error: String(err.message || err) });
+    }
+    const seg = el('div', 'seg');
+    for (const view of ['liked', 'disliked']) {
+      const b = el('button', view === likedView ? 'on' : '', t('react.' + view));
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        likedView = view;
+        GP.store.set('likedView', view);
+        likedBox.scrollTop = 0;
+        renderLiked();
+      });
+      seg.appendChild(b);
+    }
+    const bar = el('div', 'toolbar');
+    bar.append(seg);
+    const rows = items.map((it) =>
+      GP.makeRow(it.track, {
+        // a likes list is a playlist-like list: play from this track onwards
+        onPlay: () => GP.playFrom(items.map((x) => x.track), it.track),
+        subText: [it.track.artist, ago(it.at)].filter(Boolean).join(' · '),
+        actions: [queueAction(it.track), GP.playlistAction(it.track)],
+        remove: {
+          icon: 'i-close',
+          title: t('react.undo'),
+          onClick: async () => {
+            await api.reactions.set(it.track, 0, it.pair);
+            await GP.reloadReactions();
+            renderLiked();
+          },
+        },
+      }),
+    );
+    likedBox.replaceChildren(bar, ...(rows.length ? rows : [GP.emptyMessage(t(likedView === 'liked' ? 'react.emptyLiked' : 'react.emptyDisliked'))]));
+    GP.markCurrentRows();
+    likedBox.scrollTop = scroll;
+  }
+
   // ---------- Playlists: covers ----------
   function coverNode(pl, extra = '') {
     const box = el('div', 'pl-cover ' + extra);
@@ -414,7 +463,11 @@
   GP.pickPlaylist = pickPlaylist;
   GP.onTab = (name) => {
     if (name === 'history') renderHistory();
+    else if (name === 'liked') renderLiked();
     else if (name === 'playlists') renderPlaylists();
+  };
+  GP.onReactionsChanged = () => {
+    if (!likedBox.classList.contains('hidden')) renderLiked();
   };
   GP.onHistoryChanged = () => {
     if (!histBox.classList.contains('hidden') && histView === 'recent') renderHistory();

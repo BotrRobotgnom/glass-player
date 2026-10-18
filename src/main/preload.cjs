@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('api', {
     changelog: (force) => ipcRenderer.invoke('changelog:get', !!force),
     onState: (cb) => ipcRenderer.on('update:state', (_e, s) => cb(s)),
   },
+  reactions: {
+    set: (track, value, pair) => ipcRenderer.invoke('reactions:set', track, value, pair),
+    get: (kind) => ipcRenderer.invoke('reactions:get', kind),
+    map: () => ipcRenderer.invoke('reactions:map'),
+  },
+  markBlocked: (videoId) => ipcRenderer.invoke('blocked:mark', videoId),
   history: {
     record: (track, seconds) => ipcRenderer.invoke('history:record', track, seconds),
     get: (view, limit) => ipcRenderer.invoke('history:get', view, limit),

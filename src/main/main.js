@@ -6,12 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { startServer } from './server.js';
 import { searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable } from './youtube.js';
 import { searchSoundCloud, resolveSoundCloud, isSoundCloudUrl } from './soundcloud.js';
-import { pickBest, splitArtistTitle } from './match.js';
+import { pickBest, splitArtistTitle, mergeResults } from './match.js';
 import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
 import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
 import * as library from './library.js';
-import { getHome, getSimilar } from './recommend.js';
+import { getHome, getSimilar, resetCache } from './recommend.js';
 import * as autostart from './autostart.js';
 import * as trayIcon from './tray.js';
 import { registerDebugIpc, openDebugWindow, closeDebugWindow } from './debugWindow.js';
@@ -210,6 +210,17 @@ ipcMain.handle('recommend:similar', (_e, track, exclude) =>
 ipcMain.handle('recommend:get', (_e, force) => getHome(!!force));
 
 // Library: history and playlists
+ipcMain.handle('reactions:set', (_e, track, value, pair) => {
+  const v = library.setReaction(track, Number(value) || 0, pair);
+  resetCache();
+  return v;
+});
+ipcMain.handle('reactions:get', (_e, kind) => library.getReactions(kind === 'disliked' ? 'disliked' : 'liked'));
+ipcMain.handle('reactions:map', () => library.reactionMap());
+ipcMain.handle('blocked:mark', (_e, videoId) => {
+  library.markBlocked(String(videoId || '').slice(0, 20));
+  resetCache();
+});
 ipcMain.handle('history:record', (_e, track, seconds) => library.recordPlay(track, seconds));
 ipcMain.handle('history:get', (_e, view, limit) => library.getHistory(String(view), Math.min(Number(limit) || 200, 500)));
 ipcMain.handle('history:stats', () => library.getHistoryStats());
@@ -289,7 +300,7 @@ ipcMain.handle('suggest', async (_e, query) => {
 // A pasted link is opened directly.
 ipcMain.handle('search', async (_e, { query, sources }) => {
   const q = String(query || '').trim();
-  if (!q) return { youtube: [], soundcloud: [], errors: {} };
+  if (!q) return { youtube: [], soundcloud: [], merged: [], errors: {} };
   const want = new Set(sources || ['youtube', 'soundcloud']);
   const out = { youtube: [], soundcloud: [], errors: {} };
   const started = Date.now();
@@ -297,6 +308,7 @@ ipcMain.handle('search', async (_e, { query, sources }) => {
 
   const done = async () => {
     await markEmbeddable(out.youtube);
+    out.merged = mergeResults(q, out.youtube, out.soundcloud);
     const ms = Date.now() - started;
     const failed = Object.keys(out.errors);
     const blocked = out.youtube.filter((x) => x.embeddable === false).length;

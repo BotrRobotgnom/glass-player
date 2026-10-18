@@ -40,11 +40,18 @@ function createStore(fileName, defaults) {
   let data = null;
   let timer = null;
 
+  const readJson = (f) => {
+    const text = fs.readFileSync(f, 'utf8');
+    if (!text.trim()) throw new Error('file is empty');
+    return JSON.parse(text);
+  };
+
   function load() {
     if (data) return data;
     try {
-      data = { ...defaults(), ...JSON.parse(fs.readFileSync(file(), 'utf8')) };
+      data = { ...defaults(), ...readJson(file()) };
     } catch (err) {
+      data = null;
       if (err.code !== 'ENOENT') {
         // keep the broken file for inspection instead of silently overwriting it
         const backup = file().replace(/\.json$/, `.corrupt-${Date.now()}.json`);
@@ -53,9 +60,15 @@ function createStore(fileName, defaults) {
         } catch {
           /* ignore */
         }
-        logger.error('library', `${fileName} could not be read, starting empty`, { error: err.message, backup });
+        logger.error('library', `${fileName} could not be read`, { error: err.message, backup });
       }
-      data = defaults();
+      // the previous good copy is kept next to the file: use it before starting empty
+      try {
+        data = { ...defaults(), ...readJson(file() + '.bak') };
+        logger.warn('library', `${fileName} restored from the backup copy`);
+      } catch {
+        data = defaults();
+      }
     }
     return data;
   }
@@ -67,7 +80,20 @@ function createStore(fileName, defaults) {
     try {
       fs.mkdirSync(path.dirname(file()), { recursive: true });
       const tmp = file() + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(data));
+      // write and flush to disk before the rename, so an interrupted save cannot leave an empty file
+      const fd = fs.openSync(tmp, 'w');
+      try {
+        fs.writeSync(fd, JSON.stringify(data));
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      // keep the previous good version as a backup
+      try {
+        if (fs.statSync(file()).size > 2) fs.copyFileSync(file(), file() + '.bak');
+      } catch {
+        /* no previous file yet */
+      }
       fs.renameSync(tmp, file());
     } catch (err) {
       logger.error('library', `Saving ${fileName} failed`, err);
@@ -83,11 +109,69 @@ function createStore(fileName, defaults) {
 
 const historyStore = createStore('history.json', () => ({ tracks: {}, log: [] }));
 const playlistStore = createStore('playlists.json', () => ({ playlists: [] }));
+const reactionStore = createStore('reactions.json', () => ({ items: {} }));
+const blockedStore = createStore('blocked.json', () => ({ ids: {} }));
 
 export function flushLibrary() {
   historyStore.save();
   playlistStore.save();
+  reactionStore.save();
+  blockedStore.save();
 }
+
+// ---------- Likes and dislikes ----------
+// value: 1 = like, -1 = dislike, 0 = remove the mark
+export function setReaction(track, value, pair = '') {
+  if (!validTrack(track)) return 0;
+  const r = reactionStore.load();
+  const k = key(track);
+  const v = value > 0 ? 1 : value < 0 ? -1 : 0;
+  const group = String(pair || '').slice(0, 200);
+  if (v === 0) {
+    delete r.items[k];
+    // the same song on the other service is cleared together with it
+    if (group) for (const [kk, e] of Object.entries(r.items)) if (e.pair === group) delete r.items[kk];
+  } else r.items[k] = { track: slim(track), v, at: Date.now(), pair: group };
+  reactionStore.changed();
+  logger.info('library', `${v > 0 ? 'Liked' : v < 0 ? 'Disliked' : 'Cleared the mark on'} "${track.title}"`);
+  return v;
+}
+
+// kind: 'liked' | 'disliked'; newest first, one entry per song (its versions on both services share a pair id)
+export function getReactions(kind = 'liked', limit = 500) {
+  const want = kind === 'disliked' ? -1 : 1;
+  const seen = new Set();
+  const out = [];
+  for (const e of Object.values(reactionStore.load().items).filter((x) => x.v === want).sort((a, b) => b.at - a.at)) {
+    if (e.pair) {
+      if (seen.has(e.pair)) continue;
+      seen.add(e.pair);
+    }
+    out.push({ track: e.track, at: e.at, pair: e.pair || '' });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+// { "youtube:id": 1 | -1 } for marking rows in the interface
+export function reactionMap() {
+  const out = {};
+  for (const [k, e] of Object.entries(reactionStore.load().items)) out[k] = e.v;
+  return out;
+}
+
+export function dislikedKeys() {
+  return new Set(Object.entries(reactionStore.load().items).filter(([, e]) => e.v < 0).map(([k]) => k));
+}
+
+// ---------- Videos the player refused to embed (learned while playing) ----------
+export function markBlocked(videoId) {
+  const b = blockedStore.load();
+  if (!videoId || b.ids[videoId]) return;
+  b.ids[videoId] = Date.now();
+  blockedStore.changed();
+}
+export const isKnownBlocked = (videoId) => !!blockedStore.load().ids[videoId];
 
 // ---------- History ----------
 export function recordPlay(track, seconds) {

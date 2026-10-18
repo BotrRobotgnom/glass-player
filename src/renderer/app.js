@@ -66,13 +66,14 @@
     seeking: false,
     token: 0,
     errorStreak: 0,
+    reactions: {}, // 'source:id' -> 1 (like) | -1 (dislike)
     active: null, // 'youtube' | 'soundcloud'
   };
 
   const els = {
     form: $('#searchForm'), q: $('#q'), results: $('#results'), queue: $('#queue'), queueCount: $('#queueCount'),
     stage: $('#stage'), cover: $('#cover'), npTitle: $('#npTitle'), npArtist: $('#npArtist'),
-    npSource: $('#npSource'), npOfficial: $('#npOfficial'), npStatus: $('#npStatus'), btnSwap: $('#btnSwap'),
+    npYT: $('#npYT'), npSC: $('#npSC'), npBlockedMark: $('#npBlockedMark'), btnLike: $('#btnLike'), btnDislike: $('#btnDislike'), npInfo: $('.np-info'), npOfficial: $('#npOfficial'), npStatus: $('#npStatus'), btnSwap: $('#btnSwap'),
     btnPlay: $('#btnPlay'), btnPrev: $('#btnPrev'), btnNext: $('#btnNext'), btnShuffle: $('#btnShuffle'),
     btnRepeat: $('#btnRepeat'), btnMute: $('#btnMute'), seek: $('#seek'), volume: $('#volume'),
     btnVideo: $('#btnVideo'), tCur: $('#tCur'), tDur: $('#tDur'), toast: $('#toast'), settings: $('#settings'),
@@ -148,6 +149,49 @@
   const scEngine = new window.Engines.SoundCloudEngine('scFrame', handlersFor('soundcloud'));
   const engineOf = (name) => (name === 'youtube' ? ytEngine : scEngine);
 
+  // ---------- Likes ----------
+  const keyOf = (x) => x.source + ':' + x.id;
+  const reactionOf = (track) => {
+    if (!track) return 0;
+    const all = [track, track.alt].filter(Boolean);
+    return all.map((x) => state.reactions[keyOf(x)] || 0).find((v) => v) || 0;
+  };
+  const nowVersions = () => {
+    const n = state.now;
+    if (!n) return [];
+    const seen = new Set();
+    return [n.shown, n.yt, n.sc].filter((x) => x && !seen.has(keyOf(x)) && seen.add(keyOf(x)));
+  };
+
+  function refreshReactButtons() {
+    const mood = nowVersions().map((x) => state.reactions[keyOf(x)] || 0).find((v) => v) || 0;
+    els.btnLike.classList.toggle('on', mood > 0);
+    els.btnDislike.classList.toggle('on', mood < 0);
+    els.btnLike.classList.toggle('hidden', !state.now);
+    els.btnDislike.classList.toggle('hidden', !state.now);
+  }
+
+  async function setMood(value) {
+    const versions = nowVersions();
+    if (!versions.length) return;
+    const mood = versions.map((x) => state.reactions[keyOf(x)] || 0).find((v) => v) || 0;
+    const pairId = versions.map(keyOf).sort().join('+');
+    const nextMood = mood === value ? 0 : value; // the same button again removes the mark
+    for (const v of versions) {
+      await window.api.reactions.set(v, nextMood, pairId);
+      if (nextMood) state.reactions[keyOf(v)] = nextMood;
+      else delete state.reactions[keyOf(v)];
+    }
+    log('info', nextMood > 0 ? 'Liked' : nextMood < 0 ? 'Disliked' : 'Mark removed', { track: state.now.shown.title });
+    refreshReactButtons();
+    renderLists();
+    if (window.GP.onReactionsChanged) window.GP.onReactionsChanged();
+    if (nextMood < 0) {
+      toast(t('toast.disliked'));
+      next(true);
+    }
+  }
+
   // ---------- Lists ----------
   // actions: [{ icon, title, onClick(button) }] appear on hover left of the duration;
   // remove: { title, onClick, icon? } is a red button that takes the place of the duration on hover;
@@ -155,8 +199,13 @@
   function makeRow(track, { onPlay, actions = [], remove, subText }) {
     const row = document.createElement('div');
     row.dataset.key = track.source + ':' + track.id;
-    row.className = 'row' + (isCurrent(track) ? ' current' : '') + (track.embeddable === false ? ' blocked' : '');
-    if (track.embeddable === false) row.title = t('row.blocked');
+    const versions = [track, track.alt].filter(Boolean);
+    const ytV = versions.find((v) => v.source === 'youtube');
+    const scV = versions.find((v) => v.source === 'soundcloud');
+    const ytOff = !!ytV && ytV.embeddable === false;
+    const dead = ytOff && !scV; // nothing here can be played
+    row.className = 'row' + (isCurrent(track) ? ' current' : '') + (dead ? ' dead' : '');
+    if (dead) row.title = t('row.blocked');
 
     if (track.cover) {
       const img = document.createElement('img');
@@ -176,6 +225,13 @@
     const title = document.createElement('div');
     title.className = 'title';
     title.textContent = track.title;
+    const mood = reactionOf(track);
+    if (mood) {
+      const mark = icon(mood > 0 ? 'i-like' : 'i-dislike');
+      mark.classList.add('react-mark');
+      if (mood < 0) mark.classList.add('bad');
+      title.prepend(mark);
+    }
     const sub = document.createElement('div');
     sub.className = 'sub';
     sub.textContent = subText ?? [track.artist, track.album].filter(Boolean).join(' · ');
@@ -204,7 +260,27 @@
     const dur = document.createElement('div');
     dur.className = 'dur';
     dur.textContent = track.durationSec ? fmt(track.durationSec) : '';
-    end.appendChild(dur);
+    // which services have this track; a YouTube version that can't be embedded is grey
+    const plats = document.createElement('span');
+    plats.className = 'plats';
+    if (ytV) {
+      const i = icon('i-p-yt');
+      i.classList.add(ytOff ? 'off' : 'p-yt');
+      i.setAttribute('aria-label', ytOff ? t('plat.ytBlocked') : 'YouTube Music');
+      plats.title = ytOff ? t('plat.ytBlocked') : '';
+      plats.appendChild(i);
+    }
+    if (scV) {
+      const i = icon('i-p-sc');
+      i.classList.add('p-sc');
+      plats.appendChild(i);
+    }
+    if (dead) {
+      const i = icon('i-p-none');
+      i.classList.add('off');
+      plats.appendChild(i);
+    }
+    end.append(plats, dur);
     if (remove) {
       const del = document.createElement('button');
       del.className = 'del';
@@ -238,36 +314,40 @@
   }
 
   // only results from the enabled sources are shown
-  const shownResults = (src) => (state.sources[src] ? state.results[src] : []);
+  // One list for both services, ordered by closeness to the query. Only enabled sources count:
+  // a pair keeps just the enabled version (the other becomes the main one if needed).
   function flatResults() {
-    return [...shownResults('youtube'), ...shownResults('soundcloud')];
+    const on = state.sources;
+    const merged = state.results.merged || [];
+    const out = [];
+    for (const item of merged) {
+      const { alt, ...main } = item;
+      const versions = [main, alt].filter((v) => v && on[v.source]);
+      if (!versions.length) continue;
+      const [first, second] = versions;
+      out.push(second ? { ...first, alt: second } : { ...first });
+    }
+    return out;
   }
 
   function renderResults() {
     const box = els.results;
     box.replaceChildren();
-    if (!flatResults().length) {
+    const list = flatResults();
+    if (!list.length) {
       box.appendChild(emptyMessage(t('results.empty')));
       return;
     }
-    const groups = [
-      [t('group.youtube'), shownResults('youtube')],
-      [t('group.soundcloud'), shownResults('soundcloud')],
-    ];
-    for (const [label, tracks] of groups) {
-      if (!tracks.length) continue;
-      box.appendChild(groupTitle(label));
-      for (const track of tracks) {
-        box.appendChild(
-          makeRow(track, {
-            onPlay: () => playFromResults(track),
-            actions: [
-              { icon: 'i-plus', title: t('row.addToQueue'), onClick: () => addToQueue(track) },
-              playlistAction(track),
-            ],
-          }),
-        );
-      }
+    for (const track of list) {
+      box.appendChild(
+        makeRow(track, {
+          onPlay: () => playFromResults(track),
+          actions: [
+            { icon: 'i-plus', title: t('row.addToQueue'), onClick: () => addToQueue(track) },
+            playlistAction(track),
+          ],
+        }),
+      );
     }
   }
 
@@ -317,6 +397,7 @@
     renderResults();
     renderQueue();
     markCurrentRows();
+    refreshReactButtons();
   }
 
   // ---------- Queue ----------
@@ -403,13 +484,19 @@
   async function playTrack(track) {
     const token = ++state.token;
     resetListening();
-    log('info', `Play: ${track.artist} - ${track.title}`, { source: track.source, id: track.id });
-    let yt = track.source === 'youtube' ? track : null;
-    let sc = track.source === 'soundcloud' ? track : null;
+    // a search result may carry the same track from the other service
+    const alt = track.alt || null;
+    if (alt) {
+      track = { ...track };
+      delete track.alt;
+    }
+    log('info', `Play: ${track.artist} - ${track.title}`, { source: track.source, id: track.id, alt: alt ? alt.source : undefined });
+    let yt = track.source === 'youtube' ? track : alt && alt.source === 'youtube' ? alt : null;
+    let sc = track.source === 'soundcloud' ? track : alt && alt.source === 'soundcloud' ? alt : null;
     let shown = track;
 
-    // Priority: look for the same track on the preferred service
-    const want = state.priority === 'youtube' && sc ? 'youtube' : state.priority === 'soundcloud' && yt ? 'soundcloud' : null;
+    // Priority: look for the same track on the preferred service (unless both versions are already known)
+    const want = state.priority === 'youtube' && sc && !yt ? 'youtube' : state.priority === 'soundcloud' && yt && !sc ? 'soundcloud' : null;
     if (want) {
       setStatus(t('np.looking'));
       renderNow({ shown: track, yt, sc });
@@ -421,8 +508,14 @@
         else sc = shown = found.track;
       }
     }
+    // both versions known: take the preferred one, but never a YouTube video that can't be embedded
+    if (yt && sc) {
+      if (yt.embeddable === false) shown = sc;
+      else if (state.priority === 'youtube') shown = yt;
+      else if (state.priority === 'soundcloud') shown = sc;
+    }
 
-    state.now = { shown, yt, sc };
+    state.now = { shown, yt, sc, official: !!(want === 'youtube' && yt && yt !== track) };
     startEngine(shown);
     renderNow(state.now);
     renderLists();
@@ -465,6 +558,12 @@
 
   function onPlayError(code) {
     const n = state.now;
+    // the player itself says embedding is forbidden: remember it, so Home, search and similar tracks stop offering it
+    if (n && n.shown.source === 'youtube' && (code === 101 || code === 150)) {
+      n.shown.embeddable = false;
+      if (n.yt) n.yt.embeddable = false;
+      window.api.markBlocked(n.shown.id);
+    }
     // A manual version switch failed: return to the previous version at the same position
     if (state.revert) {
       const r = state.revert;
@@ -638,12 +737,22 @@
     els.btnVideo.classList.toggle('hidden', !canVideo);
     updateVideo();
 
-    els.npSource.textContent = sourceLabel(track.source);
-    els.npSource.className = 'badge ' + (track.source === 'youtube' ? 'yt' : 'sc');
-    els.npSource.classList.remove('hidden');
+    // platforms this track exists on; a YouTube version that can't be embedded is grey
+    const ytV = n.yt || (track.source === 'youtube' ? track : null);
+    const scV = n.sc || (track.source === 'soundcloud' ? track : null);
+    const ytOff = !!ytV && (n.ytBlocked || ytV.embeddable === false);
+    const dead = ytOff && !scV;
+    els.npYT.classList.toggle('hidden', !ytV);
+    els.npYT.classList.toggle('gray', ytOff);
+    els.npYT.title = ytOff ? t('plat.ytBlocked') : '';
+    els.npSC.classList.toggle('hidden', !scV);
+    els.npBlockedMark.classList.toggle('hidden', !dead);
+    els.npBlockedMark.title = t('plat.none');
+    els.npInfo.classList.toggle('dead', dead);
+    refreshReactButtons();
 
     // The official version is the YouTube Music match found for a SoundCloud track
-    const official = track.source === 'youtube' && !!n.sc;
+    const official = track.source === 'youtube' && !!n.official;
     els.npOfficial.classList.toggle('hidden', !official);
     $('#btnNpPlaylist').classList.remove('hidden');
 
@@ -723,7 +832,7 @@
     try {
       const res = await window.api.search(query, sources);
       if (id !== searchId) return; // a newer search has started: drop this answer
-      state.results = { youtube: res.youtube || [], soundcloud: res.soundcloud || [] };
+      state.results = { merged: res.merged || [] };
       renderResults();
       for (const [src, msg] of Object.entries(res.errors || {})) {
         toast(`${sourceLabel(src)}: ${msg}`);
@@ -741,14 +850,18 @@
 
   function showTab(name) {
     $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-    for (const panel of ['home', 'results', 'queue', 'history', 'playlists']) $('#' + panel).classList.toggle('hidden', name !== panel);
+    for (const panel of ['home', 'results', 'queue', 'history', 'playlists', 'liked']) $('#' + panel).classList.toggle('hidden', name !== panel);
     if (window.GP && window.GP.onTab) window.GP.onTab(name);
   }
 
   // What library.js (history and playlists) needs from the player
   window.GP = {
     makeRow, groupTitle, emptyMessage, icon, toast, log, store, showTab, addToQueue, playFrom, sameTrack,
-    playlistAction, markCurrentRows,
+    playlistAction, markCurrentRows, reactionOf,
+    reloadReactions: async () => {
+      state.reactions = (await window.api.reactions.map()) || {};
+      renderLists();
+    },
     currentTrack: () => (state.now ? state.now.shown : null),
     shuffleArray: (a) => a.map((x) => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(([, x]) => x),
   };
@@ -824,7 +937,7 @@
     // the results belonged to the text that was just erased
     searchId++;
     lastQuery = '';
-    state.results = { youtube: [], soundcloud: [] };
+    state.results = { merged: [] };
     renderResults();
     els.q.focus();
   });
@@ -890,6 +1003,15 @@
 
   els.btnPlay.addEventListener('click', togglePlay);
   els.btnNext.addEventListener('click', () => next(false));
+  els.btnLike.addEventListener('click', () => setMood(1));
+  els.btnDislike.addEventListener('click', () => setMood(-1));
+  window.api.reactions
+    .map()
+    .then((m) => {
+      state.reactions = m || {};
+      renderLists();
+    })
+    .catch(() => {});
   els.btnPrev.addEventListener('click', prev);
   els.btnSwap.addEventListener('click', switchVersion);
 

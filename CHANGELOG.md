@@ -4,6 +4,22 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.3.0
+
+### Added
+- Likes and dislikes: buttons next to the playing track, a "Liked" tab (liked and disliked lists), and a mark on tracks in every list. Liked tracks influence recommendations; disliked ones are hidden from Home and from similar tracks, and a disliked track that is playing is skipped.
+- Search shows one list for both services, ordered by how well a result fits the query. The same song found on YouTube Music and SoundCloud is a single row.
+- Rows show which services have the track (YouTube / SoundCloud icons next to the duration). A YouTube version that can't be embedded is grey; a track that can't be played anywhere is greyed out with a crossed-circle icon.
+- The now-playing panel shows both platforms the same way.
+
+### Changed
+- Home never shows videos that can't be embedded. When the player itself refuses a video, the app remembers it and stops offering it on Home, in search pairs and in similar tracks.
+
+## 0.2.8
+
+### Fixed
+- History and playlists could be lost when a save was interrupted and left an empty file. Saves are now flushed to disk before the file is replaced, the previous good copy is kept as `.bak`, and an unreadable file is restored from it instead of starting empty.
+
 ## 0.2.7
 
 ### Added
