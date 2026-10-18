@@ -4,6 +4,16 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.3.1
+
+### Added
+- Artist pages inside the app (YouTube Music and SoundCloud): photo, description, all songs, and shelves of albums, singles, playlists and related artists. Click an artist's name in any list or in the now-playing panel to open it; Back returns to where you were.
+- Album and playlist pages with Play, Shuffle and "Save to my playlists", which copies the whole list into a playlist of your own.
+- Search now also shows matching artists and playlists/albums next to the tracks. Playlists and albums can be saved straight from the result row.
+
+### Changed
+- Tracks remember their artist's id, so history, queue and playlists can open the artist page too (older entries look the artist up by name).
+
 ## 0.3.0
 
 ### Added

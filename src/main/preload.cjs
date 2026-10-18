@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld('api', {
     get: (kind) => ipcRenderer.invoke('reactions:get', kind),
     map: () => ipcRenderer.invoke('reactions:map'),
   },
+  page: {
+    artist: (source, id) => ipcRenderer.invoke('page:artist', source, id),
+    playlist: (source, id, kind) => ipcRenderer.invoke('page:playlist', source, id, kind),
+    findArtist: (source, name) => ipcRenderer.invoke('page:findArtist', source, name),
+  },
   markBlocked: (videoId) => ipcRenderer.invoke('blocked:mark', videoId),
   history: {
     record: (track, seconds) => ipcRenderer.invoke('history:record', track, seconds),

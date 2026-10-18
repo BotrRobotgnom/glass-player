@@ -28,6 +28,12 @@ function bestThumb(thumbs = []) {
   return sorted[0].url || '';
 }
 
+// channel id of the first credited artist: lets the interface open the artist's page
+function firstArtistId(item) {
+  const list = item?.artists || item?.authors || (item?.author ? [item.author] : []);
+  return String(list.find((a) => a?.channel_id)?.channel_id || '');
+}
+
 function toTrack(item) {
   if (!item?.id) return null;
   return {
@@ -35,6 +41,7 @@ function toTrack(item) {
     source: 'youtube',
     title: item.title || '',
     artist: (item.artists || item.authors || []).map((a) => a.name).filter(Boolean).join(', '),
+    artistId: firstArtistId(item),
     album: item.album?.name || '',
     durationSec: item.duration?.seconds || 0,
     cover: bestThumb(item.thumbnails),
@@ -86,6 +93,7 @@ function panelTrack(item) {
     source: 'youtube',
     title: v.title?.toString?.() || '',
     artist: artists || String(v.author || '').replace(/ - Topic$/, ''),
+    artistId: firstArtistId(v),
     album: v.album?.name || '',
     durationSec: v.duration?.seconds || 0,
     cover: bestThumb(v.thumbnail),
@@ -115,6 +123,7 @@ function shelfTrack(item) {
     source: 'youtube',
     title: String(item.title?.toString?.() ?? item.title ?? ''),
     artist: names.join(', ') || String(item.subtitle?.toString?.() || '').split('•')[1]?.trim() || '',
+    artistId: firstArtistId(item),
     album: item.album?.name || '',
     durationSec: item.duration?.seconds || 0,
     cover: bestThumb(list),
@@ -178,6 +187,7 @@ export async function getYouTubeTrack(videoId) {
     source: 'youtube',
     title: b.title || '',
     artist: (b.author || '').replace(/ - Topic$/, ''),
+    artistId: String(b.channel_id || ''),
     album: '',
     durationSec: b.duration || 0,
     cover: bestThumb(b.thumbnail),
@@ -212,4 +222,129 @@ export async function isEmbeddable(videoId) {
 export async function markEmbeddable(tracks) {
   await Promise.all(tracks.map(async (tr) => (tr.embeddable = await isEmbeddable(tr.id))));
   return tracks;
+}
+
+
+// ---------- Artists, albums and playlists ----------
+// A "reference" is a small card-sized description of a page we can open: { source, kind, id, title, subtitle, cover }
+const text = (x) => String(x?.toString?.() ?? x ?? '').trim();
+const thumbsOf = (item) => {
+  const t = item?.thumbnails || item?.thumbnail;
+  return Array.isArray(t) ? t : t?.contents || [];
+};
+
+function toRef(item) {
+  if (!item || !item.id) return null;
+  const kind = item.item_type;
+  if (kind !== 'artist' && kind !== 'album' && kind !== 'playlist') return null;
+  const bits = [];
+  if (kind === 'artist') bits.push(item.subscribers);
+  else {
+    const by = (item.artists || (item.author ? [item.author] : [])).map((a) => a.name).filter(Boolean).join(', ');
+    bits.push(by || (item.subtitle ? text(item.subtitle).split('•').slice(-1)[0].trim() : ''), item.year, item.song_count || item.item_count);
+  }
+  return {
+    source: 'youtube',
+    kind,
+    id: String(item.id),
+    title: text(item.name || item.title),
+    subtitle: bits.filter(Boolean).join(' · '),
+    cover: bestThumb(thumbsOf(item)),
+  };
+}
+
+// artists, albums and playlists that match a search
+export async function searchYouTubeCollections(query, limit = 5) {
+  const yt = await getYT();
+  const res = await yt.music.search(query);
+  const take = (shelf) => [...(shelf?.contents || [])].map(toRef).filter(Boolean).slice(0, limit);
+  return { artists: take(res.artists), playlists: [...take(res.playlists), ...take(res.albums)] };
+}
+
+function listTrack(item, extra = {}) {
+  const t = shelfTrack(item);
+  return t ? { ...t, ...Object.fromEntries(Object.entries(extra).filter(([k, v]) => v && !t[k])) } : null;
+}
+
+// An artist page: header + a list of their songs + shelves of albums, singles, videos, playlists...
+export async function getYouTubeArtist(channelId) {
+  const yt = await getYT();
+  const artist = await yt.music.getArtist(channelId);
+  const h = artist.header;
+  const sections = [];
+  let songs = [];
+  for (const sec of artist.sections || []) {
+    const title = text(sec.header?.title || sec.title);
+    const items = [...(sec.contents || [])];
+    const tracks = items.map((i) => listTrack(i)).filter(Boolean);
+    const refs = items.map(toRef).filter(Boolean);
+    if (tracks.length && !songs.length && sec.type === 'MusicShelf') songs = tracks;
+    else if (tracks.length) sections.push({ title, tracks });
+    else if (refs.length) sections.push({ title, refs });
+  }
+  // the first shelf has only a handful of songs: ask for the complete list
+  try {
+    const all = await artist.getAllSongs();
+    const more = [...(all?.contents || [])].map((i) => listTrack(i)).filter(Boolean);
+    if (more.length > songs.length) songs = more;
+  } catch (err) {
+    logger.debug('youtube', 'Artist: full song list unavailable', { error: err.message });
+  }
+  return {
+    source: 'youtube',
+    kind: 'artist',
+    id: channelId,
+    title: text(h?.title),
+    description: text(h?.description),
+    cover: bestThumb(h?.thumbnail?.contents || h?.thumbnails || []),
+    tracks: songs,
+    sections,
+  };
+}
+
+// An album or a playlist: header + every track
+export async function getYouTubePlaylist(id, kind = 'playlist') {
+  const yt = await getYT();
+  let page;
+  let header;
+  const tracks = [];
+  if (kind === 'album') {
+    page = await yt.music.getAlbum(id);
+    header = page.header;
+    const by = text(header?.author?.name || header?.strapline_text_one);
+    const cover = bestThumb(thumbsOf(header));
+    for (const i of page.contents || []) {
+      const t = listTrack(i, { artist: by, cover, album: text(header?.title) });
+      if (t) tracks.push({ ...t, album: t.album || text(header?.title) });
+    }
+  } else {
+    page = await yt.music.getPlaylist(id);
+    header = page.header;
+    let cur = page;
+    for (let n = 0; n < 4 && cur; n++) {
+      for (const i of cur.items || []) {
+        const t = listTrack(i);
+        if (t) tracks.push(t);
+      }
+      cur = cur.has_continuation ? await cur.getContinuation().catch(() => null) : null;
+    }
+  }
+  return {
+    source: 'youtube',
+    kind,
+    id,
+    title: text(header?.title),
+    subtitle: text(header?.subtitle || header?.strapline_text_one),
+    description: text(header?.description?.description || header?.description),
+    cover: bestThumb(thumbsOf(header)) || bestThumb(page?.background?.contents || []),
+    tracks,
+  };
+}
+
+// An artist page for a name only (history items from before artist ids were stored)
+export async function findYouTubeArtist(name) {
+  const yt = await getYT();
+  const res = await yt.music.search(name, { type: 'artist' });
+  const first = [...(res.artists?.contents || res.contents?.find((c) => c?.contents)?.contents || [])].map(toRef).find(Boolean);
+  return first || null;
 }

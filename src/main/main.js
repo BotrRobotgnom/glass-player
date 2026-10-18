@@ -4,8 +4,13 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './server.js';
-import { searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable } from './youtube.js';
-import { searchSoundCloud, resolveSoundCloud, isSoundCloudUrl } from './soundcloud.js';
+import {
+  searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable, searchYouTubeCollections, getYouTubeArtist, getYouTubePlaylist,
+  findYouTubeArtist,
+} from './youtube.js';
+import {
+  searchSoundCloud, resolveSoundCloud, isSoundCloudUrl, searchSoundCloudCollections, getSoundCloudArtist, getSoundCloudPlaylist, findSoundCloudArtist,
+} from './soundcloud.js';
 import { pickBest, splitArtistTitle, mergeResults } from './match.js';
 import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
 import { getChangelog } from './changelog.js';
@@ -302,7 +307,7 @@ ipcMain.handle('search', async (_e, { query, sources }) => {
   const q = String(query || '').trim();
   if (!q) return { youtube: [], soundcloud: [], merged: [], errors: {} };
   const want = new Set(sources || ['youtube', 'soundcloud']);
-  const out = { youtube: [], soundcloud: [], errors: {} };
+  const out = { youtube: [], soundcloud: [], collections: { artists: [], playlists: [] }, errors: {} };
   const started = Date.now();
   logger.debug('search', `Search: "${q}"`, { sources: [...want] });
 
@@ -335,6 +340,11 @@ ipcMain.handle('search', async (_e, { query, sources }) => {
     return await done();
   }
 
+  // artists, albums and playlists come alongside the tracks; a failure there never breaks the search
+  const collsP = Promise.all([
+    want.has('youtube') ? searchYouTubeCollections(q).catch((err) => (logger.debug('search', 'YouTube collections failed', { error: err.message }), null)) : null,
+    want.has('soundcloud') ? searchSoundCloudCollections(q).catch((err) => (logger.debug('search', 'SoundCloud collections failed', { error: err.message }), null)) : null,
+  ].map((p) => p && p.then((r) => r)));
   await Promise.all([
     want.has('youtube')
       ? searchYouTube(q).then((r) => (out.youtube = r)).catch((err) => (out.errors.youtube = err.message))
@@ -343,7 +353,59 @@ ipcMain.handle('search', async (_e, { query, sources }) => {
       ? searchSoundCloud(q).then((r) => (out.soundcloud = r)).catch((err) => (out.errors.soundcloud = err.message))
       : null,
   ]);
+  const colls = await collsP;
+  const interleave = (a = [], b = []) => {
+    const o = [];
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      if (a[i]) o.push(a[i]);
+      if (b[i]) o.push(b[i]);
+    }
+    return o;
+  };
+  const [cy, cs] = colls;
+  out.collections = {
+    artists: interleave(cy?.artists, cs?.artists).slice(0, 4),
+    playlists: interleave(cy?.playlists, cs?.playlists).slice(0, 6),
+  };
   return await done();
+});
+
+// Pages: artist, album or playlist, opened from a result or from a track's artist name
+// automated tests get fixed pages instead of the network
+const testPage = (kind, id) => {
+  const tr = (n) => ({ id: `T${n}`, source: 'youtube', title: `Test song ${n}`, artist: 'Test Artist', artistId: 'UCtest', durationSec: 100 + n, cover: '', embeddable: true });
+  const tracks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(tr);
+  const refs = [1, 2, 3, 4, 5, 6].map((n) => ({ source: 'youtube', kind: 'album', id: `MPREtest${n}`, title: `Test album ${n}`, subtitle: '2024', cover: '' }));
+  return kind === 'artist'
+    ? { source: 'youtube', kind, id, title: 'Test Artist', description: 'A long description. '.repeat(10), subtitle: '1.2M subscribers', cover: '', tracks, sections: [{ title: 'Albums', refs }] }
+    : { source: 'youtube', kind, id, title: 'Test playlist', subtitle: 'Test Artist', cover: '', tracks };
+};
+ipcMain.handle('page:artist', async (_e, source, id) => {
+  if (process.env.GP_TEST && String(id).startsWith('UCtest')) return testPage('artist', id);
+  try {
+    return source === 'soundcloud' ? await getSoundCloudArtist(id) : await getYouTubeArtist(String(id));
+  } catch (err) {
+    logger.warn('page', `Artist page failed: ${source}:${id}`, { error: String(err.message || err) });
+    return { error: String(err.message || err) };
+  }
+});
+ipcMain.handle('page:playlist', async (_e, source, id, kind) => {
+  if (process.env.GP_TEST && String(id).startsWith('MPREtest')) return testPage(kind || 'album', id);
+  try {
+    return source === 'soundcloud' ? await getSoundCloudPlaylist(id) : await getYouTubePlaylist(String(id), kind === 'album' ? 'album' : 'playlist');
+  } catch (err) {
+    logger.warn('page', `Playlist page failed: ${source}:${id}`, { error: String(err.message || err) });
+    return { error: String(err.message || err) };
+  }
+});
+// A track without a stored artist id: find the artist by name on the same service
+ipcMain.handle('page:findArtist', async (_e, source, name) => {
+  try {
+    return source === 'soundcloud' ? await findSoundCloudArtist(String(name)) : await findYouTubeArtist(String(name));
+  } catch (err) {
+    logger.warn('page', 'Artist lookup failed', { error: String(err.message || err) });
+    return null;
+  }
 });
 
 // Look for the same track on the other service: target "youtube" (official version on YouTube Music) or "soundcloud".

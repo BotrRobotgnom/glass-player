@@ -68,23 +68,8 @@
     return c;
   }
 
-  // A titled row of cards with arrows (a mouse wheel scrolls the page, not the row)
-  function shelf(s) {
-    const wrap = el('section', 'shelf');
-    const head = el('div', 'shelf-head');
-    const arrow = (dir) => {
-      const b = el('button', 'shelf-arrow' + (dir > 0 ? ' next' : ''));
-      b.type = 'button';
-      b.title = t(dir > 0 ? 'home.next' : 'home.previous');
-      b.append(GP.icon('i-back'));
-      b.addEventListener('click', () => track.scrollBy({ left: dir * track.clientWidth * 0.85, behavior: 'smooth' }));
-      return b;
-    };
-    const track = el('div', 'shelf-track');
-    // never show what can't be played here or what was disliked
-    const shown = s.tracks.filter((tr) => tr.embeddable !== false && GP.reactionOf(tr) >= 0);
-    for (const tr of shown) track.append(card(tr, shown));
-    // drag with the left mouse button to scroll sideways; a real drag must not click the card under the cursor
+  // drag with the left mouse button to scroll a row sideways; a real drag must not click the item under the cursor
+  GP.enableDragScroll = (track) => {
     let drag = null;
     track.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
@@ -111,6 +96,25 @@
     };
     track.addEventListener('pointerup', endDrag);
     track.addEventListener('pointercancel', endDrag);
+  };
+
+  // A titled row of cards with arrows (a mouse wheel scrolls the page, not the row)
+  function shelf(s) {
+    const wrap = el('section', 'shelf');
+    const head = el('div', 'shelf-head');
+    const arrow = (dir) => {
+      const b = el('button', 'shelf-arrow' + (dir > 0 ? ' next' : ''));
+      b.type = 'button';
+      b.title = t(dir > 0 ? 'home.next' : 'home.previous');
+      b.append(GP.icon('i-back'));
+      b.addEventListener('click', () => track.scrollBy({ left: dir * track.clientWidth * 0.85, behavior: 'smooth' }));
+      return b;
+    };
+    const track = el('div', 'shelf-track');
+    // never show what can't be played here or what was disliked
+    const shown = s.tracks.filter((tr) => tr.embeddable !== false && GP.reactionOf(tr) >= 0);
+    for (const tr of shown) track.append(card(tr, shown));
+    GP.enableDragScroll(track);
     const arrows = el('div', 'shelf-arrows');
     arrows.append(arrow(-1), arrow(1));
     head.append(el('h4', 'shelf-title', sectionTitle(s)), arrows);

@@ -149,6 +149,25 @@
   const scEngine = new window.Engines.SoundCloudEngine('scFrame', handlersFor('soundcloud'));
   const engineOf = (name) => (name === 'youtube' ? ytEngine : scEngine);
 
+  // "Artist · Album" where the artist is a link to their page
+  function artistLink(track) {
+    const a = document.createElement('span');
+    a.className = 'link';
+    a.textContent = track.artist;
+    a.title = t('page.openArtist');
+    a.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.GP.openArtistOf(track);
+    });
+    return a;
+  }
+  function artistParts(track) {
+    const out = [];
+    if (track.artist) out.push(artistLink(track));
+    if (track.album) out.push(document.createTextNode((track.artist ? ' · ' : '') + track.album));
+    return out;
+  }
+
   // ---------- Likes ----------
   const keyOf = (x) => x.source + ':' + x.id;
   const reactionOf = (track) => {
@@ -234,7 +253,8 @@
     }
     const sub = document.createElement('div');
     sub.className = 'sub';
-    sub.textContent = subText ?? [track.artist, track.album].filter(Boolean).join(' · ');
+    if (subText !== undefined) sub.textContent = subText;
+    else sub.append(...artistParts(track));
     meta.append(title, sub);
     row.appendChild(meta);
 
@@ -334,20 +354,35 @@
     const box = els.results;
     box.replaceChildren();
     const list = flatResults();
-    if (!list.length) {
+    const coll = state.results.collections || { artists: [], playlists: [] };
+    // only collections from enabled sources
+    const artists = coll.artists.filter((r) => state.sources[r.source]);
+    const playlists = coll.playlists.filter((r) => state.sources[r.source]);
+    if (!list.length && !artists.length && !playlists.length) {
       box.appendChild(emptyMessage(t('results.empty')));
       return;
     }
-    for (const track of list) {
-      box.appendChild(
-        makeRow(track, {
-          onPlay: () => playFromResults(track),
-          actions: [
-            { icon: 'i-plus', title: t('row.addToQueue'), onClick: () => addToQueue(track) },
-            playlistAction(track),
-          ],
-        }),
-      );
+    if (artists.length) {
+      box.appendChild(groupTitle(t('results.artists')));
+      for (const r of artists) box.appendChild(window.GP.entityRow(r));
+    }
+    if (list.length) {
+      if (artists.length || playlists.length) box.appendChild(groupTitle(t('results.tracks')));
+      for (const track of list) {
+        box.appendChild(
+          makeRow(track, {
+            onPlay: () => playFromResults(track),
+            actions: [
+              { icon: 'i-plus', title: t('row.addToQueue'), onClick: () => addToQueue(track) },
+              playlistAction(track),
+            ],
+          }),
+        );
+      }
+    }
+    if (playlists.length) {
+      box.appendChild(groupTitle(t('results.playlists')));
+      for (const r of playlists) box.appendChild(window.GP.entityRow(r));
     }
   }
 
@@ -723,7 +758,7 @@
   function renderNow(n) {
     const track = n.shown;
     els.npTitle.textContent = track.title || t('np.untitled');
-    els.npArtist.textContent = [track.artist, track.album].filter(Boolean).join(' · ');
+    els.npArtist.replaceChildren(...artistParts(track));
     els.stage.dataset.source = track.source;
     setCover(track.cover);
 
@@ -832,12 +867,13 @@
     try {
       const res = await window.api.search(query, sources);
       if (id !== searchId) return; // a newer search has started: drop this answer
-      state.results = { merged: res.merged || [] };
+      state.results = { merged: res.merged || [], collections: res.collections || { artists: [], playlists: [] } };
       renderResults();
       for (const [src, msg] of Object.entries(res.errors || {})) {
         toast(`${sourceLabel(src)}: ${msg}`);
       }
-      if (!flatResults().length && !Object.keys(res.errors || {}).length) {
+      const hasColl = state.results.collections.artists.length || state.results.collections.playlists.length;
+      if (!flatResults().length && !hasColl && !Object.keys(res.errors || {}).length) {
         els.results.replaceChildren(emptyMessage(t('results.none')));
       }
     } catch (err) {
@@ -850,7 +886,7 @@
 
   function showTab(name) {
     $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-    for (const panel of ['home', 'results', 'queue', 'history', 'playlists', 'liked']) $('#' + panel).classList.toggle('hidden', name !== panel);
+    for (const panel of ['home', 'results', 'queue', 'history', 'playlists', 'liked', 'entity']) $('#' + panel).classList.toggle('hidden', name !== panel);
     if (window.GP && window.GP.onTab) window.GP.onTab(name);
   }
 
@@ -937,7 +973,7 @@
     // the results belonged to the text that was just erased
     searchId++;
     lastQuery = '';
-    state.results = { merged: [] };
+    state.results = { merged: [], collections: { artists: [], playlists: [] } };
     renderResults();
     els.q.focus();
   });

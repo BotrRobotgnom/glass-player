@@ -65,6 +65,7 @@ function toTrack(t) {
     source: 'soundcloud',
     title: t.title || '',
     artist: t.user?.username || '',
+    artistId: t.user?.id ? String(t.user.id) : '',
     album: '',
     durationSec: Math.round((t.full_duration || t.duration || 0) / 1000),
     cover: (t.artwork_url || t.user?.avatar_url || '').replace('-large', '-t500x500'),
@@ -103,19 +104,100 @@ export async function resolveSoundCloud(url) {
   const data = await api('/resolve', { url: url.trim() });
   if (data.kind === 'track') return [toTrack(data)].filter(Boolean);
   if (data.kind === 'playlist') {
-    const tracks = data.tracks || [];
-    // some playlist entries come without metadata: fetch them in one batch
-    const missing = tracks.filter((t) => !t.title).map((t) => t.id);
-    let filled = new Map();
-    if (missing.length) {
-      const full = await api('/tracks', { ids: missing.slice(0, 50).join(',') });
-      filled = new Map(full.map((t) => [t.id, t]));
-    }
-    return tracks.map((t) => toTrack(t.title ? t : filled.get(t.id))).filter(Boolean);
+    return fillTracks(data.tracks || []);
   }
   if (data.kind === 'user') {
     const res = await api(`/users/${data.id}/tracks`, { limit: '30' });
     return (res.collection || []).map(toTrack).filter(Boolean);
   }
   return [];
+}
+
+// Some playlist entries come without metadata: fetch them in one batch
+async function fillTracks(tracks) {
+  const missing = tracks.filter((t) => !t.title).map((t) => t.id);
+  let filled = new Map();
+  if (missing.length) {
+    const full = await api('/tracks', { ids: missing.slice(0, 50).join(',') });
+    filled = new Map(full.map((t) => [t.id, t]));
+  }
+  return tracks.map((t) => toTrack(t.title ? t : filled.get(t.id))).filter(Boolean);
+}
+
+// ---------- Artists and playlists ----------
+const bigAvatar = (url) => String(url || '').replace('-large', '-t500x500');
+
+function userRef(u) {
+  if (!u?.id) return null;
+  const followers = Number(u.followers_count) || 0;
+  return {
+    source: 'soundcloud',
+    kind: 'artist',
+    id: String(u.id),
+    title: u.username || '',
+    subtitle: followers ? `${followers.toLocaleString('en-US')} followers` : u.city || '',
+    cover: bigAvatar(u.avatar_url),
+  };
+}
+
+function playlistRef(p) {
+  if (!p?.id) return null;
+  return {
+    source: 'soundcloud',
+    kind: 'playlist',
+    id: String(p.id),
+    title: p.title || '',
+    subtitle: [p.user?.username, p.track_count ? `${p.track_count} tracks` : ''].filter(Boolean).join(' · '),
+    cover: bigAvatar(p.artwork_url || p.user?.avatar_url),
+  };
+}
+
+export async function searchSoundCloudCollections(query, limit = 5) {
+  const [users, lists] = await Promise.allSettled([
+    api('/search/users', { q: query, limit: String(limit) }),
+    api('/search/playlists_without_albums', { q: query, limit: String(limit) }),
+  ]);
+  const col = (r) => (r.status === 'fulfilled' ? r.value.collection || [] : []);
+  return { artists: col(users).map(userRef).filter(Boolean), playlists: col(lists).map(playlistRef).filter(Boolean) };
+}
+
+export async function getSoundCloudArtist(userId) {
+  const [user, tracks, lists] = await Promise.all([
+    api(`/users/${encodeURIComponent(userId)}`),
+    api(`/users/${encodeURIComponent(userId)}/tracks`, { limit: '50' }).catch(() => ({ collection: [] })),
+    api(`/users/${encodeURIComponent(userId)}/playlists_without_albums`, { limit: '20' }).catch(() => ({ collection: [] })),
+  ]);
+  const sections = [];
+  const refs = (lists.collection || []).map(playlistRef).filter(Boolean);
+  if (refs.length) sections.push({ title: 'Playlists', refs });
+  return {
+    source: 'soundcloud',
+    kind: 'artist',
+    id: String(userId),
+    title: user.username || '',
+    description: user.description || '',
+    subtitle: userRef(user)?.subtitle || '',
+    cover: bigAvatar(user.avatar_url),
+    tracks: (tracks.collection || []).map(toTrack).filter(Boolean),
+    sections,
+  };
+}
+
+export async function getSoundCloudPlaylist(id) {
+  const p = await api(`/playlists/${encodeURIComponent(id)}`);
+  return {
+    source: 'soundcloud',
+    kind: 'playlist',
+    id: String(id),
+    title: p.title || '',
+    subtitle: p.user?.username || '',
+    description: p.description || '',
+    cover: bigAvatar(p.artwork_url || p.user?.avatar_url),
+    tracks: await fillTracks(p.tracks || []),
+  };
+}
+
+export async function findSoundCloudArtist(name) {
+  const r = await searchSoundCloudCollections(name, 1);
+  return r.artists[0] || null;
 }

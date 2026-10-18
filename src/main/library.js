@@ -22,6 +22,7 @@ function slim(track) {
     source: track.source === 'soundcloud' ? 'soundcloud' : 'youtube',
     title: String(track.title || '').slice(0, 300),
     artist: String(track.artist || '').slice(0, 300),
+    artistId: String(track.artistId || '').slice(0, 60),
     album: String(track.album || '').slice(0, 300),
     durationSec: Number(track.durationSec) || 0,
     cover: typeof track.cover === 'string' ? track.cover.slice(0, 600) : '',
