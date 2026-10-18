@@ -4,6 +4,15 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.4.0
+
+### Added
+- "Other versions" under the playing track: remixes, slowed / sped up, live, acoustic, other uploads and covers of the same song, found on both YouTube Music and SoundCloud and labelled by kind. Click one to play it.
+- Genre and tags of the playing track (SoundCloud provides them) shown as small chips under the badges.
+
+### Notes
+- Versions are found by matching the song's title words and artist, not from an official link (neither service has one), so the list can occasionally include or miss something.
+
 ## 0.3.4
 
 ### Fixed

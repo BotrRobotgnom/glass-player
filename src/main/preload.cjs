@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
     findAlbum: (name, artist) => ipcRenderer.invoke('page:findAlbum', name, artist),
     findArtist: (source, name) => ipcRenderer.invoke('page:findArtist', source, name),
   },
+  versions: (track) => ipcRenderer.invoke('versions:get', track),
   checkEmbeddable: (ids) => ipcRenderer.invoke('embed:check', ids),
   markBlocked: (videoId) => ipcRenderer.invoke('blocked:mark', videoId),
   history: {

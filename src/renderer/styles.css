@@ -608,3 +608,11 @@ input[type='range']::-webkit-slider-thumb {
 .ent-rows .more { margin: 8px 10px; }
 .row.entity .round { border-radius: 50%; }
 .ent-ph { font-size: 44px; opacity: 0.6; }
+
+/* genre / tags and other versions in the now-playing panel */
+.np-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.np-tags .tag { padding: 1px 8px; border-radius: 999px; font-size: 11px; color: var(--text-dim); background: var(--card); border: 1px solid var(--card-edge); }
+.np-versions { margin-top: 10px; }
+.np-versions .row { grid-template-columns: 36px minmax(0, 1fr) auto auto; padding: 4px 6px; }
+.np-versions .row img, .np-versions .row .thumb-ph { width: 36px; height: 36px; }
+.np-versions .group-title { margin: 8px 6px 2px; }

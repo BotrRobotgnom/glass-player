@@ -58,6 +58,17 @@ async function api(path, params = {}, retry = true) {
   return res.json();
 }
 
+// SoundCloud's tag_list is one string: words separated by spaces, multi-word tags in double quotes
+function parseTags(list) {
+  const out = [];
+  for (const m of String(list || '').matchAll(/"([^"]+)"|(\S+)/g)) {
+    const tag = (m[1] || m[2] || '').trim();
+    if (tag && tag.length <= 32 && !out.some((x) => x.toLowerCase() === tag.toLowerCase())) out.push(tag);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 function toTrack(t) {
   if (!t || !t.permalink_url) return null;
   return {
@@ -66,6 +77,8 @@ function toTrack(t) {
     title: t.title || '',
     artist: t.user?.username || '',
     artistId: t.user?.id ? String(t.user.id) : '',
+    genre: String(t.genre || '').trim(),
+    tags: parseTags(t.tag_list),
     album: '',
     durationSec: Math.round((t.full_duration || t.duration || 0) / 1000),
     cover: (t.artwork_url || t.user?.avatar_url || '').replace('-large', '-t500x500'),

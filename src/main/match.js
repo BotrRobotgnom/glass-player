@@ -109,3 +109,55 @@ export function mergeResults(query, youtube = [], soundcloud = []) {
   });
   return items.sort((a, b) => b.rel - a.rel).map(({ track, alt }) => (alt ? { ...track, alt } : { ...track }));
 }
+
+// ---------- Other versions of a track: remixes, slowed, live, other uploads ----------
+const VERSION_MARKERS = [
+  ['Remix', /\b(remix|rmx|bootleg|flip|rework|edit|vip)\b/i],
+  ['Slowed', /\b(slowed|slow(ed)?\s*(\+|and|&)?\s*reverb|reverb|slow)\b/i],
+  ['Sped up', /\b(sped\s*up|speed\s*up|nightcore|fast)\b/i],
+  ['Live', /\b(live|concert|session)\b/i],
+  ['Acoustic', /\b(acoustic|unplugged|piano)\b/i],
+  ['Instrumental', /\b(instrumental|karaoke|off vocal)\b/i],
+  ['Cover', /\bcover\b/i],
+  ['Version', /\b(version|ver\.?|mix|remaster(ed)?|extended|radio|tour)\b/i],
+];
+const MARKER_WORDS = /\b(remix|rmx|bootleg|flip|rework|edit|vip|slowed|slow|reverb|sped|speed|up|nightcore|fast|live|concert|session|acoustic|unplugged|piano|instrumental|karaoke|off|vocal|cover|version|ver|mix|remaster|remastered|extended|radio|tour|and|x|feat|ft)\b/gi;
+
+// 'Remix', 'Slowed', ... or null for a plain upload
+export function versionLabel(title = '') {
+  for (const [label, re] of VERSION_MARKERS) if (re.test(title)) return label;
+  return null;
+}
+
+// the words that identify the song itself (artist prefix, brackets and version words removed)
+function coreOf(track) {
+  const { title } = splitArtistTitle(track);
+  const bare = String(title).replace(/\(.*?\)|\[.*?\]/g, ' ').replace(MARKER_WORDS, ' ');
+  return tokens(bare);
+}
+
+// Candidates that are versions of `base`: they contain every core word of its title and mention its artist.
+// The base track itself (and anything in `skip`) is left out. Each result gets a `label` ('Remix', 'Slowed', 'Other upload', ...).
+export function findVersions(base, candidates, skip = new Set()) {
+  const core = coreOf(base);
+  if (!core.size) return [];
+  const { artist } = splitArtistTitle(base);
+  const artistTokens = tokens(artist || base.artist);
+  const out = [];
+  const seen = new Set();
+  for (const c of candidates) {
+    const k = `${c.source}:${c.id}`;
+    if (seen.has(k) || skip.has(k)) continue;
+    seen.add(k);
+    const hay = tokens(`${c.title} ${c.artist}`);
+    const rawHay = new Set(normalize(`${c.title} ${c.artist}`).split(' '));
+    if (![...core].every((w) => rawHay.has(w) || [...hay].some((h) => h === w))) continue;
+    const label = versionLabel(c.title) || 'Other upload';
+    // a remix by someone else often doesn't name the original artist: accept it when the title is specific enough
+    const artistOk = !artistTokens.size || [...artistTokens].some((w) => rawHay.has(w)) || (label === 'Remix' && core.size >= 2);
+    if (!artistOk) continue;
+    out.push({ ...c, label });
+  }
+  const order = ['Remix', 'Slowed', 'Sped up', 'Live', 'Acoustic', 'Instrumental', 'Cover', 'Version', 'Other upload'];
+  return out.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}

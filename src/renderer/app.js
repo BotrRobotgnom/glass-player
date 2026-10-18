@@ -73,7 +73,7 @@
   const els = {
     form: $('#searchForm'), q: $('#q'), results: $('#results'), queue: $('#queue'), queueCount: $('#queueCount'),
     stage: $('#stage'), cover: $('#cover'), npTitle: $('#npTitle'), npArtist: $('#npArtist'),
-    npYT: $('#npYT'), npSC: $('#npSC'), npBlockedMark: $('#npBlockedMark'), btnLike: $('#btnLike'), btnDislike: $('#btnDislike'), npInfo: $('.np-info'), npOfficial: $('#npOfficial'), npStatus: $('#npStatus'), btnSwap: $('#btnSwap'),
+    npYT: $('#npYT'), npSC: $('#npSC'), npBlockedMark: $('#npBlockedMark'), btnLike: $('#btnLike'), btnDislike: $('#btnDislike'), npInfo: $('.np-info'), npTags: $('#npTags'), npVersions: $('#npVersions'), npOfficial: $('#npOfficial'), npStatus: $('#npStatus'), btnSwap: $('#btnSwap'),
     btnPlay: $('#btnPlay'), btnPrev: $('#btnPrev'), btnNext: $('#btnNext'), btnShuffle: $('#btnShuffle'),
     btnRepeat: $('#btnRepeat'), btnMute: $('#btnMute'), seek: $('#seek'), volume: $('#volume'),
     btnVideo: $('#btnVideo'), tCur: $('#tCur'), tDur: $('#tDur'), toast: $('#toast'), settings: $('#settings'),
@@ -872,6 +872,7 @@
     if (key !== shownKey) {
       shownKey = key;
       videoOn = autoVideo.checked && track.source === 'youtube' && !!track.hasVideo;
+      loadVersions(n);
     }
     const canVideo = track.source === 'youtube' && !!track.hasVideo;
     els.btnVideo.classList.toggle('hidden', !canVideo);
@@ -887,6 +888,7 @@
     els.npYT.title = ytOff ? t('plat.ytBlocked') : '';
     els.npSC.classList.toggle('hidden', !scV);
     els.npBlockedMark.classList.toggle('hidden', !dead);
+    showTags(n);
     els.npBlockedMark.title = t('plat.none');
     els.npInfo.classList.toggle('dead', dead);
     refreshReactButtons();
@@ -909,6 +911,46 @@
 
     document.title = `${track.title} — Glass Player`;
     updateMediaSession(track);
+  }
+
+  // genre and tags (SoundCloud gives them) of the track in whichever version has them
+  function showTags(n) {
+    const src = [n.shown, n.sc, n.yt].filter(Boolean).find((x) => x.genre || (x.tags && x.tags.length));
+    const words = [];
+    if (src) for (const w of [src.genre, ...(src.tags || [])]) if (w && !words.some((x) => x.toLowerCase() === w.toLowerCase())) words.push(w);
+    els.npTags.replaceChildren(
+      ...words.slice(0, 8).map((w) => Object.assign(document.createElement('span'), { className: 'tag', textContent: w })),
+    );
+    els.npTags.classList.toggle('hidden', !words.length);
+  }
+
+  // Remixes, slowed and other uploads of the current track, from both services
+  async function loadVersions(n) {
+    const key = n.shown.source + ':' + n.shown.id;
+    els.npVersions.classList.add('hidden');
+    els.npVersions.replaceChildren();
+    if (!window.api.versions) return;
+    let list = [];
+    try {
+      list = await window.api.versions(n.shown);
+    } catch {
+      return;
+    }
+    if (key !== shownKey) return; // another track is playing now
+    const mine = new Set(nowVersions().map(keyOf));
+    list = list.filter((v) => !mine.has(keyOf(v)));
+    if (!list.length) return;
+    els.npVersions.append(groupTitle(t('np.versions')));
+    for (const v of list) {
+      const row = makeRow(v, {
+        onPlay: () => playOne(v),
+        subText: [t('np.ver.' + v.label), v.artist].filter(Boolean).join(' · '),
+        actions: [{ icon: 'i-plus', title: t('row.addToQueue'), onClick: () => addToQueue(v) }, playlistAction(v)],
+      });
+      els.npVersions.append(row);
+    }
+    els.npVersions.classList.remove('hidden');
+    markCurrentRows();
   }
 
   let shownKey = '';

@@ -24,6 +24,8 @@ function slim(track) {
     artist: String(track.artist || '').slice(0, 300),
     artistId: String(track.artistId || '').slice(0, 60),
     albumId: String(track.albumId || '').slice(0, 60),
+    genre: String(track.genre || '').slice(0, 40),
+    tags: Array.isArray(track.tags) ? track.tags.slice(0, 8).map((x) => String(x).slice(0, 32)) : [],
     album: String(track.album || '').slice(0, 300),
     durationSec: Number(track.durationSec) || 0,
     cover: typeof track.cover === 'string' ? track.cover.slice(0, 600) : '',

@@ -11,7 +11,7 @@ import {
 import {
   searchSoundCloud, resolveSoundCloud, isSoundCloudUrl, searchSoundCloudCollections, getSoundCloudArtist, getSoundCloudPlaylist, findSoundCloudArtist,
 } from './soundcloud.js';
-import { pickBest, splitArtistTitle, mergeResults } from './match.js';
+import { pickBest, splitArtistTitle, mergeResults, findVersions } from './match.js';
 import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
 import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
@@ -434,6 +434,41 @@ ipcMain.handle('page:findAlbum', async (_e, name, artist) => {
   } catch (err) {
     logger.warn('page', 'Album lookup failed', { error: String(err.message || err) });
     return null;
+  }
+});
+
+// Other versions of a track (remixes, slowed, live, other uploads) from both services
+const versionCache = new Map();
+ipcMain.handle('versions:get', async (_e, track) => {
+  if (process.env.GP_TEST && track && track.id === 'VER') {
+    const v = (id, label) => ({ id, source: 'soundcloud', title: `Song (${label})`, artist: 'Artist', durationSec: 120, cover: '', label });
+    return [v('v1', 'Remix'), v('v2', 'Slowed'), v('v3', 'Other upload')];
+  }
+  if (!track || !track.id) return [];
+  const ck = `${track.source}:${track.id}`;
+  if (versionCache.has(ck)) return versionCache.get(ck);
+  try {
+    const { artist, title } = splitArtistTitle(track);
+    const bare = String(title).replace(/\(.*?\)|\[.*?\]/g, ' ').trim() || title;
+    const q = [artist || track.artist, bare].filter(Boolean).join(' ');
+    const [yt, sc] = await Promise.all([
+      searchYouTube(q, { type: 'song', limit: 20 }).catch(() => []),
+      searchSoundCloud(q, 30).catch(() => []),
+    ]);
+    const found = findVersions(track, [...yt, ...sc], new Set([ck])).slice(0, 12);
+    for (const v of found) {
+      if (v.source === 'youtube') {
+        const k = knownEmbeddable(v.id);
+        if (k !== undefined) v.embeddable = k;
+      }
+    }
+    logger.info('versions', `Versions of "${track.title}": ${found.length}`, { query: q });
+    if (versionCache.size > 100) versionCache.clear();
+    versionCache.set(ck, found);
+    return found;
+  } catch (err) {
+    logger.warn('versions', 'Versions lookup failed', { error: String(err.message || err) });
+    return [];
   }
 });
 
