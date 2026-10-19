@@ -220,17 +220,29 @@ async function limited(fn) {
   }
 }
 
-// true / false when YouTube says so, null when the answer is missing
+// true / false when YouTube says so, null when the answer is missing.
+// Two asks: the normal web player (its `playableInEmbed` flag) and the *embedded* client, which is what the iframe
+// really is. The web flag alone said "yes" for videos the iframe then refused (error 150), so either "no" counts.
 async function playerSaysEmbeddable(videoId) {
-  try {
-    const yt = await getYT();
-    const res = await yt.actions.execute('/player', { videoId, racyCheckOk: true, contentCheckOk: true, parse: false });
-    const flag = res?.data?.playabilityStatus?.playableInEmbed;
-    return typeof flag === 'boolean' ? flag : null;
-  } catch (err) {
-    logger.debug('youtube', `Player check failed for ${videoId}`, { error: err.message });
-    return null;
-  }
+  const ask = async (client) => {
+    try {
+      const yt = await getYT();
+      const res = await yt.actions.execute('/player', { videoId, racyCheckOk: true, contentCheckOk: true, parse: false, ...(client ? { client } : {}) });
+      return res?.data?.playabilityStatus || null;
+    } catch (err) {
+      logger.debug('youtube', `Player check failed for ${videoId}`, { client: client || 'WEB', error: err.message });
+      return null;
+    }
+  };
+  const [web, emb] = await Promise.all([ask(null), ask('WEB_EMBEDDED')]);
+  const webFlag = typeof web?.playableInEmbed === 'boolean' ? web.playableInEmbed : null;
+  // the embedded client answers OK only for videos the iframe can play
+  // (only UNPLAYABLE counts as a refusal: LOGIN_REQUIRED / ERROR are bot checks or hiccups, not a verdict on the video)
+  const embFlag = emb?.status === 'OK' ? true : emb?.status === 'UNPLAYABLE' ? false : null;
+  logger.debug('youtube', `Embed check ${videoId}`, { web: web?.status, webFlag, embedded: emb?.status, reason: emb?.reason });
+  if (webFlag === false || embFlag === false) return false;
+  if (webFlag === true || embFlag === true) return true;
+  return null;
 }
 
 async function oembedSaysEmbeddable(videoId) {

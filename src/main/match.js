@@ -131,24 +131,39 @@ export function versionLabel(title = '') {
 }
 
 // the words that identify the song itself (artist prefix, brackets and version words removed)
-function coreOf(track) {
-  const { title } = splitArtistTitle(track);
-  const bare = String(title).replace(/\(.*?\)|\[.*?\]/g, ' ').replace(MARKER_WORDS, ' ');
-  return tokens(bare);
+function coreOf(track, drop = new Set()) {
+  // the whole title: "Artist - Song" and "Song - Artist" both occur, the artist's words are dropped below anyway
+  const bare = String(track.title).replace(/\(.*?\)|\[.*?\]/g, ' ').replace(MARKER_WORDS, ' ');
+  return new Set([...tokens(bare)].filter((w) => !drop.has(w)));
 }
 
 const sameSet = (a, b) => a.size === b.size && [...a].every((w) => b.has(w));
 
-// Is `c` another version of the song `base`? The words that name the song must be the same (version words and
-// bracketed parts are ignored), and the artist must be mentioned (a remix by someone else may skip it when the title is specific).
+// How different may the lengths be? A slowed or extended copy is longer or shorter, but a 4:29 song is not a 1:40 one.
+const MAX_RATIO = { Remix: 2.4, Version: 2.4, Live: 2.4, Cover: 2.0 };
+function lengthsFit(base, c, label) {
+  const a = base.durationSec || 0;
+  const b = c.durationSec || 0;
+  if (!a || !b) return true;
+  return Math.max(a, b) / Math.min(a, b) <= (MAX_RATIO[label] || 1.8);
+}
+
+// Is `c` another version of the song `base`? The words that name the song must be the same (version words, bracketed
+// parts and the artist's own name are ignored). A remix may add the remixer's name ("... Mylancore remix"), up to a few words.
+// The base artist must be mentioned and the lengths must be comparable.
 export function isVersionOf(base, c) {
-  const core = coreOf(base);
-  if (!core.size || !sameSet(core, coreOf(c))) return false;
   const { artist } = splitArtistTitle(base);
   const artistTokens = tokens(artist || base.artist);
-  const rawHay = new Set(normalize(`${c.title} ${c.artist}`).split(' '));
+  const core = coreOf(base, artistTokens);
+  if (!core.size) return false;
   const label = versionLabel(c.title) || 'Other upload';
-  return !artistTokens.size || [...artistTokens].some((w) => rawHay.has(w)) || (label === 'Remix' && core.size >= 2);
+  const other = coreOf(c, artistTokens);
+  const same = sameSet(core, other);
+  const withRemixer = label === 'Remix' && other.size > core.size && other.size - core.size <= 4 && [...core].every((w) => other.has(w));
+  if (!same && !withRemixer) return false;
+  if (!lengthsFit(base, c, label)) return false;
+  const rawHay = new Set(normalize(`${c.title} ${c.artist}`).split(' '));
+  return !artistTokens.size || [...artistTokens].some((w) => rawHay.has(w)) || (label === 'Remix' && same && core.size >= 2);
 }
 
 const labelOf = (t) => versionLabel(t.title) || 'Other upload';

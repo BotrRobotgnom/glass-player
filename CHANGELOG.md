@@ -4,6 +4,13 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.4.2
+
+### Fixed
+- A different song with the same title no longer lands in a versions block: lengths must be comparable (a 4:29 track is not a 1:40 one) and the artist must match.
+- Remixes whose title carries the remixer's name outside brackets ("... Mylancore remix", "... dj osama type remix") and the artist's name in any position now go into the versions block.
+- Home and search still showed YouTube videos that refuse to be embedded (error 150): the embeddability check now also asks YouTube's embedded player, not only the web player.
+
 ## 0.4.1
 
 ### Added
