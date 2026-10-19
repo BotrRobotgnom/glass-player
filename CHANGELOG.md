@@ -4,6 +4,16 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.4.1
+
+### Added
+- Search: remixes, slowed / sped up versions and other uploads of a result are moved out of the main list into one framed block under that result (first 5, "Show N more" for the rest). They no longer appear twice.
+- Long names in the versions lists wrap to two lines, and the full name shows on hover.
+
+### Changed
+- Versions are matched more strictly: the words that name the song must be the same, so "Spin Again" is no longer taken for a version of "Spin".
+- Exact duplicates (same recording, or the same ISRC when SoundCloud provides it) are folded into one, and the YouTube and SoundCloud copies of a version are joined into one row with both icons.
+
 ## 0.4.0
 
 ### Added

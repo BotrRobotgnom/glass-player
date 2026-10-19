@@ -257,6 +257,7 @@
     const title = document.createElement('div');
     title.className = 'title';
     title.textContent = track.title;
+    title.title = track.title; // long names are cut in narrow lists: the full one shows on hover
     const mood = reactionOf(track);
     if (mood) {
       const mark = icon(mood > 0 ? 'i-like' : 'i-dislike');
@@ -363,6 +364,45 @@
     return out;
   }
 
+  // Remixes, slowed and other uploads of a result live in their own framed block under it (not in the main list)
+  const openBlocks = new Set(); // results whose block is expanded
+  function versionBlock(track) {
+    const on = state.sources;
+    const vers = (track.versions || []).filter((v) => on[v.source] || (v.alt && on[v.alt.source]));
+    if (!vers.length) return null;
+    const k = keyOf(track);
+    const block = document.createElement('div');
+    block.className = 'ver-block';
+    const open = openBlocks.has(k);
+    const shown = open ? vers : vers.slice(0, 5);
+    const head = document.createElement('div');
+    head.className = 'ver-head';
+    head.textContent = t(vers.length === 1 ? 'results.versions.one' : 'results.versions', { count: vers.length });
+    block.append(head);
+    for (const v of shown) {
+      block.append(
+        makeRow(v, {
+          onPlay: () => playOne(v),
+          subText: [t('np.ver.' + v.label), v.artist].filter(Boolean).join(' · '),
+          actions: [{ icon: 'i-plus', title: t('row.addToQueue'), onClick: () => addToQueue(v) }, playlistAction(v)],
+        }),
+      );
+    }
+    if (vers.length > 5) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'swap more';
+      more.textContent = open ? t('results.versions.less') : t('results.versions.more', { count: vers.length - 5 });
+      more.addEventListener('click', () => {
+        if (open) openBlocks.delete(k);
+        else openBlocks.add(k);
+        renderResults();
+      });
+      block.append(more);
+    }
+    return block;
+  }
+
   function renderResults() {
     const box = els.results;
     const scroll = box.scrollTop;
@@ -392,6 +432,8 @@
             ],
           }),
         );
+        const block = versionBlock(track);
+        if (block) box.appendChild(block);
       }
     }
     if (playlists.length) {
@@ -404,7 +446,10 @@
   // Results appear at once; YouTube videos that can't be embedded are found out in small batches and greyed as the answers arrive
   async function verifyEmbeds(id) {
     const vids = [];
-    for (const item of state.results.merged || []) for (const v of [item, item.alt]) if (v && v.source === 'youtube' && v.embeddable === undefined) vids.push(v);
+    for (const item of state.results.merged || []) {
+      const group = [item, item.alt, ...(item.versions || []).flatMap((v) => [v, v.alt])];
+      for (const v of group) if (v && v.source === 'youtube' && v.embeddable === undefined && !vids.includes(v)) vids.push(v);
+    }
     for (let i = 0; i < vids.length; i += 4) {
       if (id !== searchId) return; // a newer search replaced these results
       const batch = vids.slice(i, i + 4);
@@ -938,7 +983,7 @@
     }
     if (key !== shownKey) return; // another track is playing now
     const mine = new Set(nowVersions().map(keyOf));
-    list = list.filter((v) => !mine.has(keyOf(v)));
+    list = list.filter((v) => !mine.has(keyOf(v)) && !(v.alt && mine.has(keyOf(v.alt))));
     if (!list.length) return;
     els.npVersions.append(groupTitle(t('np.versions')));
     for (const v of list) {

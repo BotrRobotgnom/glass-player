@@ -77,6 +77,7 @@ function toTrack(t) {
     title: t.title || '',
     artist: t.user?.username || '',
     artistId: t.user?.id ? String(t.user.id) : '',
+    isrc: String(t.publisher_metadata?.isrc || '').trim().toUpperCase(),
     genre: String(t.genre || '').trim(),
     tags: parseTags(t.tag_list),
     album: '',

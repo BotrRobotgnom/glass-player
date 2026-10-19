@@ -320,7 +320,7 @@ ipcMain.handle('search', async (_e, { query, sources }) => {
   if (!q) return { youtube: [], soundcloud: [], merged: [], errors: {} };
   if (process.env.GP_TEST && q === '__test') {
     const y = (id, n) => ({ id, source: 'youtube', title: `Song ${n}`, artist: 'Artist', durationSec: 100, cover: '' });
-    return { youtube: [], soundcloud: [], collections: { artists: [], playlists: [] }, errors: {}, merged: [y('OK1', 1), y('BLK1', 2), y('BLK2', 3), y('OK2', 4), y('OK3', 5)] };
+    return { youtube: [], soundcloud: [], collections: { artists: [], playlists: [] }, errors: {}, merged: [y('OK1', 1), { ...y('BLK1', 2), versions: ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((x) => ({ ...y('V' + x, 9), label: x === 'a' ? 'Remix' : 'Slowed', title: 'A very long name of a version with many sound effects and a slogan (' + x + ')' })) }, y('BLK2', 3), y('OK2', 4), y('OK3', 5)] };
   }
   const want = new Set(sources || ['youtube', 'soundcloud']);
   const out = { youtube: [], soundcloud: [], collections: { artists: [], playlists: [] }, errors: {} };

@@ -107,7 +107,8 @@ export function mergeResults(query, youtube = [], soundcloud = []) {
   soundcloud.forEach((sc, j) => {
     if (!usedSc.has(j)) items.push({ track: sc, alt: null, rel: relevance(query, sc, j) });
   });
-  return items.sort((a, b) => b.rel - a.rel).map(({ track, alt }) => (alt ? { ...track, alt } : { ...track }));
+  const ranked = items.sort((a, b) => b.rel - a.rel).map(({ track, alt }) => (alt ? { ...track, alt } : { ...track }));
+  return clusterResults(ranked);
 }
 
 // ---------- Other versions of a track: remixes, slowed, live, other uploads ----------
@@ -136,28 +137,87 @@ function coreOf(track) {
   return tokens(bare);
 }
 
-// Candidates that are versions of `base`: they contain every core word of its title and mention its artist.
-// The base track itself (and anything in `skip`) is left out. Each result gets a `label` ('Remix', 'Slowed', 'Other upload', ...).
-export function findVersions(base, candidates, skip = new Set()) {
+const sameSet = (a, b) => a.size === b.size && [...a].every((w) => b.has(w));
+
+// Is `c` another version of the song `base`? The words that name the song must be the same (version words and
+// bracketed parts are ignored), and the artist must be mentioned (a remix by someone else may skip it when the title is specific).
+export function isVersionOf(base, c) {
   const core = coreOf(base);
-  if (!core.size) return [];
+  if (!core.size || !sameSet(core, coreOf(c))) return false;
   const { artist } = splitArtistTitle(base);
   const artistTokens = tokens(artist || base.artist);
+  const rawHay = new Set(normalize(`${c.title} ${c.artist}`).split(' '));
+  const label = versionLabel(c.title) || 'Other upload';
+  return !artistTokens.size || [...artistTokens].some((w) => rawHay.has(w)) || (label === 'Remix' && core.size >= 2);
+}
+
+const labelOf = (t) => versionLabel(t.title) || 'Other upload';
+const LABEL_ORDER = ['Remix', 'Slowed', 'Sped up', 'Live', 'Acoustic', 'Instrumental', 'Cover', 'Version', 'Other upload'];
+
+// The very same recording: same ISRC, or the same title, artist and length on the same service
+export function sameRecording(a, b) {
+  if (a.isrc && b.isrc) return a.isrc === b.isrc;
+  return (
+    a.source === b.source &&
+    normalize(a.title) === normalize(b.title) &&
+    normalize(a.artist) === normalize(b.artist) &&
+    Math.abs((a.durationSec || 0) - (b.durationSec || 0)) <= 1
+  );
+}
+
+// Sorts versions, folds exact duplicates away and joins the YouTube and SoundCloud copies of one version into one item
+export function tidyVersions(list) {
   const out = [];
+  for (const v of list) {
+    if (out.some((o) => sameRecording(o, v) || (o.alt && sameRecording(o.alt, v)))) continue; // an exact copy
+    const mate = out.find((o) => !o.alt && o.source !== v.source && o.label === v.label && scoreCandidate(o.source === 'soundcloud' ? o : v, o.source === 'soundcloud' ? v : o) >= 0.72);
+    if (mate) mate.alt = v;
+    else out.push({ ...v });
+  }
+  return out.sort((a, b) => LABEL_ORDER.indexOf(a.label) - LABEL_ORDER.indexOf(b.label));
+}
+
+// Candidates that are versions of `base`, labelled ('Remix', 'Slowed', ..., 'Other upload'). `base` itself and `skip` are left out.
+export function findVersions(base, candidates, skip = new Set()) {
   const seen = new Set();
+  const out = [];
   for (const c of candidates) {
     const k = `${c.source}:${c.id}`;
     if (seen.has(k) || skip.has(k)) continue;
     seen.add(k);
-    const hay = tokens(`${c.title} ${c.artist}`);
-    const rawHay = new Set(normalize(`${c.title} ${c.artist}`).split(' '));
-    if (![...core].every((w) => rawHay.has(w) || [...hay].some((h) => h === w))) continue;
-    const label = versionLabel(c.title) || 'Other upload';
-    // a remix by someone else often doesn't name the original artist: accept it when the title is specific enough
-    const artistOk = !artistTokens.size || [...artistTokens].some((w) => rawHay.has(w)) || (label === 'Remix' && core.size >= 2);
-    if (!artistOk) continue;
-    out.push({ ...c, label });
+    if (isVersionOf(base, c)) out.push({ ...c, label: labelOf(c) });
   }
-  const order = ['Remix', 'Slowed', 'Sped up', 'Live', 'Acoustic', 'Instrumental', 'Cover', 'Version', 'Other upload'];
-  return out.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+  return tidyVersions(out);
+}
+
+// Search results: songs that are versions of each other are folded under one main result.
+// The main one is a plain (unmarked) upload, the best ranked; the rest go to `versions`, in the order of kind.
+export function clusterResults(items) {
+  const n = items.length;
+  const parent = items.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (isVersionOf(items[i], items[j]) || isVersionOf(items[j], items[i])) parent[find(j)] = find(i);
+    }
+  }
+  const groups = new Map();
+  items.forEach((it, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(i);
+  });
+  const result = [];
+  for (const idxs of groups.values()) {
+    if (idxs.length === 1) {
+      result.push({ at: idxs[0], item: items[idxs[0]] });
+      continue;
+    }
+    const plain = idxs.filter((i) => !versionLabel(items[i].title));
+    const main = (plain.length ? plain : idxs)[0];
+    const rest = idxs.filter((i) => i !== main).map((i) => ({ ...items[i], label: labelOf(items[i]) }));
+    const versions = tidyVersions(rest.filter((v) => !sameRecording(v, items[main]) && !(items[main].alt && sameRecording(v, items[main].alt))));
+    result.push({ at: idxs[0], item: versions.length ? { ...items[main], versions } : items[main] });
+  }
+  return result.sort((a, b) => a.at - b.at).map((r) => r.item);
 }
