@@ -14,3 +14,9 @@ Rules:
 - The GitHub release description is built from that entry automatically when the tag is pushed. Versions that were never published are added below it, so nothing is lost when a release skips some.
 - The version matches the git tag with a leading `v` (`v0.0.2`) and the GitHub release name.
 - Versions are never skipped or reused: a published tag is not rewritten. If a mistake is found, the fix ships as the next version.
+
+## Pre-releases
+
+To give a test version to volunteers first: push the tag as usual, and on the draft release tick "Set as a pre-release" before publishing.
+Users with Settings → Updates → "Pre-releases" on get it as an update; everyone else only sees it in the changelog with a "Pre-release" tag.
+When the version is final, publish the next one (or a new release of the same code) as a normal release.

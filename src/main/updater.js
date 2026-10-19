@@ -41,11 +41,20 @@ function readUpdateConfig() {
   }
 }
 
-// Newest published release (drafts, pre-releases and stray "untagged-…" releases are ignored).
+// Newest published release (drafts, pre-releases unless switched on, and stray "untagged-…" releases are ignored).
 // electron-updater's own lookup scrapes the releases page and fails with a confusing "406" when nothing
 // is published, so we ask the API first and only hand over to electron-updater when a newer version exists.
+let allowPre = false;
+export const prereleasesAllowed = () => allowPre;
+// The "receive pre-releases" setting: off by default, only stable releases are offered
+export function setAllowPrerelease(on) {
+  allowPre = !!on;
+  if (canAutoUpdate) autoUpdater.allowPrerelease = allowPre;
+  logger.info('update', `Pre-releases ${allowPre ? 'on' : 'off'}`);
+}
+
 async function fetchLatestRelease(cfg) {
-  const [latest] = await fetchPublishedReleases(cfg);
+  const [latest] = await fetchPublishedReleases(cfg, { prerelease: allowPre });
   return latest || null;
 }
 

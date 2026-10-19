@@ -108,6 +108,7 @@
     card.open = state === 'new' || state === 'open';
     const head = el('summary', 'cl-rel-head');
     head.appendChild(el('span', 'cl-ver', 'v' + rel.version));
+    if (rel.prerelease) head.appendChild(el('span', 'cl-badge pre', t('changelog.prerelease')));
     if (state === 'new') head.appendChild(el('span', 'cl-badge new', t('changelog.new')));
     if (state === 'current' || state === 'open') head.appendChild(el('span', 'cl-badge', t('changelog.installed')));
     head.appendChild(el('span', 'cl-date', formatDate(rel.date)));
@@ -126,9 +127,11 @@
       return;
     }
     const installed = data.installed;
-    const newer = data.releases.filter((r) => cmp(r.version, installed) > 0);
-    const rest = data.releases.filter((r) => cmp(r.version, installed) <= 0);
-    const latest = data.releases[0].version;
+    // a newer pre-release counts as an update only when pre-releases are switched on; otherwise it is just listed
+    const offered = (r) => !r.prerelease || data.allowPrerelease;
+    const newer = data.releases.filter((r) => cmp(r.version, installed) > 0 && offered(r));
+    const rest = data.releases.filter((r) => !newer.includes(r));
+    const latest = newer.length ? newer[0].version : data.releases[0].version;
 
     sub.textContent = newer.length
       ? t('changelog.subUpdate', { latest, installed })

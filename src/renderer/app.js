@@ -1594,6 +1594,14 @@
   });
 
   // Automatic checks can be switched off (the manual Check button always works)
+  const prerelease = $('#prerelease');
+  prerelease.checked = store.get('prerelease', false);
+  window.api.update.setPrerelease(prerelease.checked);
+  prerelease.addEventListener('change', () => {
+    store.set('prerelease', prerelease.checked);
+    window.api.update.setPrerelease(prerelease.checked);
+    window.api.update.check();
+  });
   const autoUpdate = $('#autoUpdate');
   autoUpdate.checked = store.get('autoUpdate', true);
   window.api.update.setAuto(autoUpdate.checked);

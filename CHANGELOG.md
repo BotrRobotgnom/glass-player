@@ -4,6 +4,15 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.4.3
+
+### Added
+- Settings → Updates → "Pre-releases": off by default. When on, the app also offers GitHub releases marked as pre-release.
+- The changelog lists pre-releases with a "Pre-release" tag. Without the setting they are only listed, never offered as an update.
+
+### Fixed
+- The same title by different artists no longer ends up in one versions block: a result joins a group only when it is a version of that group's main track (no chains through other results), and a remix must name the main track's artist.
+
 ## 0.4.2
 
 ### Fixed

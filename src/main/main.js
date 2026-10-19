@@ -12,7 +12,7 @@ import {
   searchSoundCloud, resolveSoundCloud, isSoundCloudUrl, searchSoundCloudCollections, getSoundCloudArtist, getSoundCloudPlaylist, findSoundCloudArtist,
 } from './soundcloud.js';
 import { pickBest, splitArtistTitle, mergeResults, findVersions } from './match.js';
-import { initUpdater, startAutoCheck, setAutoCheck, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
+import { initUpdater, startAutoCheck, setAutoCheck, setAllowPrerelease, checkForUpdates, installUpdate, getUpdateState } from './updater.js';
 import { getChangelog } from './changelog.js';
 import * as logger from './logger.js';
 import * as library from './library.js';
@@ -257,6 +257,7 @@ ipcMain.handle('update:get', () => getUpdateState());
 ipcMain.handle('update:check', () => checkForUpdates());
 ipcMain.handle('update:install', () => installUpdate());
 ipcMain.on('update:setAuto', (_e, on) => setAutoCheck(on));
+ipcMain.on('update:setPrerelease', (_e, on) => setAllowPrerelease(on));
 ipcMain.handle('changelog:get', (_e, force) => getChangelog(!!force));
 
 // Logging from the page (fire and forget)

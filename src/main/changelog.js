@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import * as logger from './logger.js';
 import { fetchPublishedReleases, repoFromPackage, compareVersions } from './releases.js';
+import { prereleasesAllowed } from './updater.js';
 
 const TTL = 10 * 60 * 1000;
 let cache = null; // { at, data }
@@ -64,15 +65,15 @@ function bundledReleases() {
 }
 
 export async function getChangelog(force = false) {
-  if (!force && cache && Date.now() - cache.at < TTL) return cache.data;
+  if (!force && cache && Date.now() - cache.at < TTL) return { ...cache.data, allowPrerelease: prereleasesAllowed() };
   const installed = app.getVersion();
   let data;
   try {
     const cfg = repoFromPackage();
     if (!cfg) throw new Error('No GitHub repository in package.json');
-    const releases = await fetchPublishedReleases(cfg, { html: true });
+    const releases = await fetchPublishedReleases(cfg, { html: true, prerelease: true });
     if (!releases.length) throw new Error('No published releases');
-    data = { source: 'github', installed, releases };
+    data = { source: 'github', installed, releases, allowPrerelease: prereleasesAllowed() };
   } catch (err) {
     logger.info('update', `Release notes from GitHub unavailable (${err.message}), using the bundled changelog`);
     try {
@@ -83,5 +84,5 @@ export async function getChangelog(force = false) {
     }
   }
   cache = { at: Date.now(), data };
-  return data;
+  return { ...data, allowPrerelease: prereleasesAllowed() };
 }

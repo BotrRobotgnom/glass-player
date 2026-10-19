@@ -1,4 +1,4 @@
-// Published GitHub releases (drafts and pre-releases are invisible to the app on purpose).
+// Published GitHub releases (drafts are invisible to the app on purpose; pre-releases only when asked for).
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -27,7 +27,7 @@ export function repoFromPackage() {
 }
 
 // Newest first. `html: true` asks GitHub for the notes already rendered (body_html).
-export async function fetchPublishedReleases(cfg, { html = false, limit = 30 } = {}) {
+export async function fetchPublishedReleases(cfg, { html = false, limit = 30, prerelease = false } = {}) {
   const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/releases?per_page=${limit}`, {
     headers: {
       Accept: html ? 'application/vnd.github.full+json' : 'application/vnd.github+json',
@@ -39,12 +39,13 @@ export async function fetchPublishedReleases(cfg, { html = false, limit = 30 } =
   if (!res.ok) throw new Error(`GitHub answered HTTP ${res.status}`);
   const list = await res.json();
   return list
-    .filter((r) => !r.draft && !r.prerelease && isSemver(r.tag_name)) // also skips stray "untagged-…" releases
+    .filter((r) => !r.draft && (prerelease || !r.prerelease) && isSemver(r.tag_name)) // also skips stray "untagged-…" releases
     .map((r) => ({
       version: String(r.tag_name).replace(/^v/i, ''),
       name: r.name || r.tag_name,
       date: r.published_at || r.created_at || null,
       url: r.html_url,
+      prerelease: !!r.prerelease,
       html: html ? r.body_html || '' : '',
     }))
     .sort((a, b) => compareVersions(b.version, a.version));

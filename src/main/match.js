@@ -163,7 +163,8 @@ export function isVersionOf(base, c) {
   if (!same && !withRemixer) return false;
   if (!lengthsFit(base, c, label)) return false;
   const rawHay = new Set(normalize(`${c.title} ${c.artist}`).split(' '));
-  return !artistTokens.size || [...artistTokens].some((w) => rawHay.has(w)) || (label === 'Remix' && same && core.size >= 2);
+  // the base artist must be named (in the title or as the uploader): the same title by another artist is another song
+  return !artistTokens.size || [...artistTokens].some((w) => rawHay.has(w));
 }
 
 const labelOf = (t) => versionLabel(t.title) || 'Other upload';
@@ -208,31 +209,24 @@ export function findVersions(base, candidates, skip = new Set()) {
 // Search results: songs that are versions of each other are folded under one main result.
 // The main one is a plain (unmarked) upload, the best ranked; the rest go to `versions`, in the order of kind.
 export function clusterResults(items) {
-  const n = items.length;
-  const parent = items.map((_, i) => i);
-  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      if (isVersionOf(items[i], items[j]) || isVersionOf(items[j], items[i])) parent[find(j)] = find(i);
-    }
-  }
-  const groups = new Map();
-  items.forEach((it, i) => {
-    const r = find(i);
-    if (!groups.has(r)) groups.set(r, []);
-    groups.get(r).push(i);
+  // No chains: a result joins a group only when it is a version of the group's MAIN track itself, so the same title
+  // by different artists makes separate groups. Plain uploads are mains first; marked ones (remix, slowed...) join one of them.
+  const mains = [];
+  const group = new Map(); // main index -> member indexes
+  const place = (i) => {
+    const m = mains.find((k) => isVersionOf(items[k], items[i]));
+    if (m === undefined) {
+      mains.push(i);
+      group.set(i, []);
+    } else group.get(m).push(i);
+  };
+  items.forEach((it, i) => !versionLabel(it.title) && place(i));
+  items.forEach((it, i) => versionLabel(it.title) && place(i));
+  const result = mains.map((m) => {
+    const rest = group.get(m).sort((a, b) => a - b).map((i) => ({ ...items[i], label: labelOf(items[i]) }));
+    const versions = tidyVersions(rest.filter((v) => !sameRecording(v, items[m]) && !(items[m].alt && sameRecording(v, items[m].alt))));
+    const at = Math.min(m, ...group.get(m));
+    return { at, item: versions.length ? { ...items[m], versions } : items[m] };
   });
-  const result = [];
-  for (const idxs of groups.values()) {
-    if (idxs.length === 1) {
-      result.push({ at: idxs[0], item: items[idxs[0]] });
-      continue;
-    }
-    const plain = idxs.filter((i) => !versionLabel(items[i].title));
-    const main = (plain.length ? plain : idxs)[0];
-    const rest = idxs.filter((i) => i !== main).map((i) => ({ ...items[i], label: labelOf(items[i]) }));
-    const versions = tidyVersions(rest.filter((v) => !sameRecording(v, items[main]) && !(items[main].alt && sameRecording(v, items[main].alt))));
-    result.push({ at: idxs[0], item: versions.length ? { ...items[main], versions } : items[main] });
-  }
   return result.sort((a, b) => a.at - b.at).map((r) => r.item);
 }
