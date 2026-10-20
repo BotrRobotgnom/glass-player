@@ -108,6 +108,8 @@ select.field option::checkmark { color: var(--accent); }
 
 .row .lv { font-weight: 700; font-size: 11px; color: var(--dim); }
 .row.lv-warn { border-left-color: #d9a21b; }
+.row.lv-info .lv { color: var(--accent); }
+.row.lv-debug .lv { color: #8791a8; }
 .row.lv-warn .lv { color: #d9a21b; }
 .row.lv-error { border-left-color: #e5484d; background: rgba(229, 72, 77, 0.08); }
 .row.lv-error .lv, .row.lv-error .msg { color: #ef6a6f; }

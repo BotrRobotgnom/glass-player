@@ -176,7 +176,7 @@
     render();
     renderButtons();
     try {
-      data = await api.update.changelog(reason === 'update');
+      data = await api.update.changelog(true);
     } catch (err) {
       GP.log('warn', 'Loading the changelog failed', { error: String(err.message || err) });
       data = { source: 'none', installed: '0.0.0', releases: [] };

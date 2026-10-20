@@ -4,6 +4,14 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.4.5
+
+### Changed
+- Debug log: the level name (DEBUG, INFO, WARN, ERROR) now has the colour of its filter button.
+
+### Fixed
+- The changelog is fetched from GitHub every time it is opened (it was cached for 10 minutes), so a release published a moment ago, pre-releases included, shows up at once.
+
 ## 0.4.4
 
 ### Changed
