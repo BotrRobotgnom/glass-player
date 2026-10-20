@@ -581,6 +581,9 @@ input[type='range']::-webkit-slider-thumb {
 .badge.plat.off, .badge.plat.gray { color: var(--text-dim); border-color: var(--card-edge); opacity: 0.8; }
 .np-info.dead { opacity: 0.7; }
 .np-react { display: flex; gap: 6px; margin-left: auto; }
+.swap.react svg + svg { margin-left: 3px; }
+/* the scrollbar of the track panel stays inside the rounded frame instead of running over its corners */
+.now::-webkit-scrollbar-track { margin: 18px 0; }
 .np-info .swap.react { margin-top: 0; padding: 3px 8px; border-radius: 999px; }
 .swap.react svg { width: 15px; height: 15px; }
 .swap.react.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }

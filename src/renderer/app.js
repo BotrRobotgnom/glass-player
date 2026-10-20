@@ -949,7 +949,10 @@
       // a YouTube version that cannot be embedded is known to fail: show it as unavailable instead of offering it
       const blocked = other.source === 'youtube' && (n.ytBlocked || other.embeddable === false);
       els.btnSwap.disabled = blocked;
-      $('span', els.btnSwap).textContent = t(blocked ? 'np.ytUnavailable' : other.source === 'youtube' ? 'np.swapToYouTube' : 'np.swapToSoundCloud');
+      const label = t(blocked ? 'np.ytUnavailable' : other.source === 'youtube' ? 'np.swapToYouTube' : 'np.swapToSoundCloud');
+      els.btnSwap.title = label;
+      els.btnSwap.setAttribute('aria-label', label);
+      $('#swapTarget use').setAttribute('href', other.source === 'youtube' ? '#i-p-yt' : '#i-p-sc');
     } else {
       els.btnSwap.classList.add('hidden');
     }

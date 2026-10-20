@@ -4,6 +4,14 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.4.4
+
+### Changed
+- "Add to playlist" and the version switch in the track panel are now small icon buttons next to like/dislike (the text shows on hover). The switch shows which service it goes to.
+
+### Fixed
+- The scrollbar of the track panel no longer runs over the rounded frame.
+
 ## 0.4.3
 
 ### Added
