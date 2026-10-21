@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('api', {
     add: (id, tracks) => ipcRenderer.invoke('playlists:add', id, tracks),
     removeTrack: (id, trackKey) => ipcRenderer.invoke('playlists:remove', id, trackKey),
     pickImage: () => ipcRenderer.invoke('playlists:pickImage'),
+    pickFolder: () => ipcRenderer.invoke('playlists:pickFolder'),
+    rescan: (id) => ipcRenderer.invoke('playlists:rescan', id),
   },
   log: {
     write: (level, source, message, data) => ipcRenderer.send('log:write', level, source, message, data),

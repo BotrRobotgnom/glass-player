@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './server.js';
+import { MIME as AUDIO_MIME, readCover } from './local.js';
 import {
   searchYouTube, suggestYouTube, extractVideoId, getYouTubeTrack, markEmbeddable, isEmbeddable, knownEmbeddable, searchYouTubeCollections, getYouTubeArtist, getYouTubePlaylist,
   findYouTubeArtist, findYouTubeAlbum,
@@ -100,7 +101,11 @@ async function createWindow() {
   logger.info('window', 'Effects available', { ...effectInfo, windowsBuild: isWin ? windowsBuild() : undefined });
   if (isWin) logger.info('window', 'Windows "Transparency effects" enabled', { enabled: await readTransparencyEnabled() });
 
-  const { port } = await startServer(rendererDir);
+  const { port } = await startServer(rendererDir, 47831, {
+    path: (id) => library.findLocalPath(id),
+    mime: (file) => AUDIO_MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+    cover: readCover,
+  });
   origin = `http://127.0.0.1:${port}`;
   logger.info('app', 'Local server started', { origin });
 
@@ -251,6 +256,8 @@ ipcMain.handle('playlists:delete', (_e, id) => library.deletePlaylist(String(id)
 ipcMain.handle('playlists:add', (_e, id, tracks) => library.addToPlaylist(String(id), tracks));
 ipcMain.handle('playlists:remove', (_e, id, trackKey) => library.removeFromPlaylist(String(id), String(trackKey)));
 ipcMain.handle('playlists:pickImage', () => library.pickImage(win));
+ipcMain.handle('playlists:pickFolder', () => library.pickFolder(win));
+ipcMain.handle('playlists:rescan', (_e, id) => library.rescanPlaylist(String(id)));
 
 ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('update:get', () => getUpdateState());

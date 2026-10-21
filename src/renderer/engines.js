@@ -219,5 +219,55 @@
     }
   }
 
-  window.Engines = { YouTubeEngine, SoundCloudEngine };
+  // ---------- Local files (a plain audio element fed by the local server) ----------
+  class LocalEngine {
+    constructor(handlers) {
+      this.h = handlers;
+      this.audio = new Audio();
+      this.audio.preload = 'auto';
+      this.volume = 80;
+      this.audio.volume = 0.8;
+      const a = this.audio;
+      a.addEventListener('playing', () => this.h.onState('playing'));
+      a.addEventListener('pause', () => !a.ended && this.h.onState('paused'));
+      a.addEventListener('waiting', () => this.h.onState('buffering'));
+      a.addEventListener('ended', () => this.h.onState('ended'));
+      a.addEventListener('timeupdate', () => this.h.onTime(a.currentTime || 0, Number.isFinite(a.duration) ? a.duration : 0));
+      a.addEventListener('error', () => this.h.onError && this.h.onError('local'));
+    }
+
+    async load(track, startAt = 0) {
+      this.audio.src = `/local/file/${encodeURIComponent(track.id)}`;
+      if (startAt > 0) this.audio.currentTime = startAt;
+      this.audio.volume = this.volume / 100;
+      await this.audio.play().catch((err) => {
+        if (err && err.name !== 'AbortError') throw err; // a newer load() cancels this one: not a failure
+      });
+    }
+
+    play() {
+      this.audio.play().catch(() => {});
+    }
+
+    pause() {
+      this.audio.pause();
+    }
+
+    stop() {
+      this.audio.pause();
+      this.audio.removeAttribute('src');
+      this.audio.load();
+    }
+
+    seek(sec) {
+      this.audio.currentTime = sec;
+    }
+
+    setVolume(v) {
+      this.volume = v;
+      this.audio.volume = Math.max(0, Math.min(1, v / 100));
+    }
+  }
+
+  window.Engines = { YouTubeEngine, SoundCloudEngine, LocalEngine };
 })();

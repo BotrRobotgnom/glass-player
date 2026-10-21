@@ -4,6 +4,19 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 0.5.1
+
+### Fixed
+- The app no longer fails to start when the tag-reading package is missing from the build (local files then show their file names as titles).
+
+## 0.5.0
+
+### Added
+- Local music: when creating or editing a playlist, "Link a folder…" opens the file picker. Every audio file in that folder and its subfolders (mp3, flac, wav, ogg, opus, m4a, aac, wma) becomes a track, with title, artist, album, length and cover art read from the tags (the file name is the title when there are no tags).
+- A linked playlist is scanned again whenever it is opened, and with the new "Rescan" button. New files appear, deleted ones disappear; a track you remove by hand stays out. The folder can be changed or unlinked in the edit dialog.
+- Local tracks play like any other: queue, seeking, volume, likes, history. Playing one from History or Liked continues through the playlist it came from.
+- A "Local file" badge in the track panel and a folder icon in lists.
+
 ## 0.4.5
 
 ### Changed

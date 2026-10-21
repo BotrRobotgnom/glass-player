@@ -55,6 +55,20 @@
 
   const queueAction = (track) => ({ icon: 'i-plus', title: t('row.addToQueue'), onClick: () => GP.addToQueue(track) });
 
+  // A local file belongs to the playlist of its folder: playing it from history plays on through that playlist
+  async function playFromSource(track) {
+    if (track.playlistId) {
+      try {
+        const pl = await api.playlists.get(track.playlistId);
+        const same = pl && pl.tracks.find((x) => x.source === track.source && x.id === track.id);
+        if (same) return GP.playFrom(pl.tracks, same);
+      } catch {
+        /* fall through: just the track */
+      }
+    }
+    GP.playFrom([track], track);
+  }
+
   // ---------- History ----------
   const histBox = $('#history');
   let histView = GP.store.get('historyView', 'recent');
@@ -99,7 +113,8 @@
       else bits.push(plural('history.plays', it.plays), ago(it.last));
       return GP.makeRow(it.track, {
         // history is a log, not a playlist: playing a row plays that track only (the queue is not filled with the list)
-        onPlay: () => GP.playFrom([it.track], it.track),
+        // a file from a linked folder continues with its playlist (the source it came from)
+        onPlay: () => (it.track.source === 'local' ? playFromSource(it.track) : GP.playFrom([it.track], it.track)),
         subText: bits.filter(Boolean).join(' · '),
         actions: [queueAction(it.track), GP.playlistAction(it.track)],
         remove: {
@@ -197,7 +212,10 @@
   const dlgPreview = $('#plCoverPreview');
   const dlgRemove = $('#plRemoveCover');
   const dlgPick = $('#plPick');
-  let dlgState = null; // { playlist, token, previewUrl, removeCover, resolve }
+  const dlgFolderPick = $('#plFolderPick');
+  const dlgFolderClear = $('#plFolderClear');
+  const dlgFolderPath = $('#plFolderPath');
+  let dlgState = null; // { playlist, token, previewUrl, removeCover, folder, resolve }; folder: undefined = unchanged, path = link, null = unlink
 
   function drawDialogCover() {
     const s = dlgState;
@@ -215,13 +233,24 @@
     $('span', dlgPick).textContent = t(shown ? 'playlist.changeImage' : 'playlist.chooseImage');
   }
 
+  function drawDialogFolder() {
+    const s = dlgState;
+    const shown = s.folder === undefined ? (s.playlist && s.playlist.folder) || '' : s.folder || '';
+    dlgFolderPath.textContent = shown;
+    dlgFolderPath.classList.toggle('hidden', !shown);
+    dlgFolderClear.classList.toggle('hidden', !shown);
+    $('span', dlgFolderPick).textContent = t(shown ? 'playlist.changeFolder' : 'playlist.linkFolder');
+  }
+
   // Resolves with the saved playlist, or null when cancelled
   function openPlaylistDialog(playlist = null) {
     return new Promise((resolve) => {
-      dlgState = { playlist, token: null, previewUrl: null, removeCover: false, resolve };
+      dlgState = { playlist, token: null, previewUrl: null, removeCover: false, folder: undefined, resolve };
       $('#plDialogTitle').textContent = t(playlist ? 'playlist.edit' : 'playlist.new');
       dlgName.value = playlist ? playlist.name : '';
       drawDialogCover();
+      drawDialogFolder();
+      $('#plSave').disabled = false;
       dlg.showModal();
       dlgName.focus();
       dlgName.select();
@@ -247,6 +276,18 @@
     dlgState.removeCover = false;
     drawDialogCover();
   });
+  dlgFolderPick.addEventListener('click', async () => {
+    const folder = await api.playlists.pickFolder();
+    if (!folder || !dlgState) return;
+    dlgState.folder = folder;
+    if (!dlgName.value.trim()) dlgName.value = folder.split(/[\\/]/).filter(Boolean).pop() || '';
+    drawDialogFolder();
+  });
+  dlgFolderClear.addEventListener('click', () => {
+    if (!dlgState) return;
+    dlgState.folder = null;
+    drawDialogFolder();
+  });
   dlgRemove.addEventListener('click', () => {
     if (!dlgState) return;
     dlgState.token = null;
@@ -265,11 +306,18 @@
     if (!s) return;
     const name = dlgName.value;
     let saved;
-    if (s.playlist) {
-      saved = await api.playlists.update(s.playlist.id, { name, coverToken: s.token, removeCover: s.removeCover && !s.token });
-    } else {
-      saved = await api.playlists.create({ name, coverToken: s.token });
-      GP.toast(t('playlist.created'));
+    $('#plSave').disabled = true; // scanning a big folder takes a moment
+    try {
+      if (s.playlist) {
+        const patch = { name, coverToken: s.token, removeCover: s.removeCover && !s.token };
+        if (s.folder !== undefined) patch.folder = s.folder;
+        saved = await api.playlists.update(s.playlist.id, patch);
+      } else {
+        saved = await api.playlists.create({ name, coverToken: s.token, folder: s.folder || undefined });
+        GP.toast(t('playlist.created'));
+      }
+    } finally {
+      $('#plSave').disabled = false;
     }
     closeDialog(saved);
   });
@@ -333,12 +381,34 @@
 
   // ---------- Playlists: list and detail views ----------
   const plBox = $('#playlists');
-  const plView = { id: null };
+  const plView = { id: null, scanned: null };
+
+  async function rescan(id, announce) {
+    let r = null;
+    try {
+      r = await api.playlists.rescan(id);
+    } catch (err) {
+      GP.log('warn', 'Scanning the folder failed', { error: String(err.message || err) });
+    }
+    if (!r || plView.id !== id) return;
+    if (r.folderMissing) GP.toast(t('playlist.folderMissing'));
+    else if (announce) GP.toast(t('playlist.rescanned', { count: r.tracks.length }));
+    renderPlaylistDetail(r);
+  }
 
   async function renderPlaylists() {
     if (plView.id) {
-      const pl = await api.playlists.get(plView.id);
-      if (pl) return renderPlaylistDetail(pl);
+      const id = plView.id;
+      const pl = await api.playlists.get(id);
+      if (pl) {
+        renderPlaylistDetail(pl);
+        // a playlist linked to a folder is scanned again whenever it is opened
+        if (pl.folder && plView.scanned !== id) {
+          plView.scanned = id;
+          await rescan(id, false);
+        }
+        return;
+      }
       plView.id = null;
     }
     renderPlaylistList();
@@ -407,6 +477,7 @@
     back.append(GP.icon('i-back'), el('span', '', t('playlist.back')));
     back.addEventListener('click', () => {
       plView.id = null;
+      plView.scanned = null;
       renderPlaylists();
     });
 
@@ -435,8 +506,17 @@
       plView.id = null;
       renderPlaylists();
     });
-    btns.append(playBtn, shuffleBtn, editBtn, delBtn);
-    info.append(el('h3', '', pl.name), el('p', '', plural('playlist.tracks', pl.tracks.length)), btns);
+    btns.append(playBtn, shuffleBtn, editBtn);
+    if (pl.folder) btns.append(button('i-refresh', t('playlist.rescan'), () => rescan(pl.id, true)));
+    btns.append(delBtn);
+    info.append(el('h3', '', pl.name), el('p', '', plural('playlist.tracks', pl.tracks.length)));
+    if (pl.folder) {
+      const f = el('div', 'pl-folder');
+      f.title = pl.folder;
+      f.append(GP.icon('i-p-local'), el('span', '', t('playlist.linked', { name: pl.folderName })));
+      info.append(f);
+    }
+    info.append(btns);
     const head = el('div', 'pl-head');
     head.append(coverNode(pl, 'head'), info, el('div', 'pl-total', totalTime(pl.duration, pl.tracks.length)));
 

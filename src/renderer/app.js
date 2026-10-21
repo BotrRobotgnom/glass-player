@@ -147,7 +147,9 @@
 
   const ytEngine = new window.Engines.YouTubeEngine('ytMount', handlersFor('youtube'));
   const scEngine = new window.Engines.SoundCloudEngine('scFrame', handlersFor('soundcloud'));
-  const engineOf = (name) => (name === 'youtube' ? ytEngine : scEngine);
+  const localEngine = new window.Engines.LocalEngine(handlersFor('local'));
+  const engineOf = (name) => (name === 'youtube' ? ytEngine : name === 'local' ? localEngine : scEngine);
+  const allEngines = [ytEngine, scEngine, localEngine];
 
   // "Artist · Album" where the artist is a link to their page
   function artistLink(track) {
@@ -163,6 +165,7 @@
   }
   function artistParts(track) {
     const out = [];
+    if (track.source === 'local') return [document.createTextNode([track.artist, track.album].filter(Boolean).join(' · '))];
     if (track.artist) out.push(artistLink(track));
     if (track.album) {
       if (track.artist) out.push(document.createTextNode(' · '));
@@ -307,6 +310,13 @@
     if (scV) {
       const i = icon('i-p-sc');
       i.classList.add('p-sc');
+      plats.appendChild(i);
+    }
+    if (track.source === 'local') {
+      const i = icon('i-p-local');
+      i.classList.add('p-local');
+      i.setAttribute('aria-label', t('plat.local'));
+      plats.title = t('plat.local');
       plats.appendChild(i);
     }
     if (dead) {
@@ -545,8 +555,7 @@
     if (i < state.queue.length) playIndex(i);
     else if (state.repeat === 'all' && state.queue.length) playIndex(0);
     else {
-      ytEngine.pause();
-      scEngine.pause();
+      allEngines.forEach((e) => e.pause());
       state.index = -1;
       state.playing = false;
       updatePlayButton();
@@ -567,7 +576,7 @@
     state.index = 0;
     renderQueue();
     playTrack(track);
-    if (!state.autoSimilar) return;
+    if (!state.autoSimilar || track.source === 'local') return;
     const token = state.token;
     let done;
     const mine = new Promise((r) => (done = r));
@@ -636,6 +645,14 @@
       delete track.alt;
     }
     log('info', `Play: ${track.artist} - ${track.title}`, { source: track.source, id: track.id, alt: alt ? alt.source : undefined });
+    // a file on this computer: no service to choose from, nothing to look up
+    if (track.source === 'local') {
+      state.now = { shown: track, yt: null, sc: null };
+      startEngine(track);
+      renderNow(state.now);
+      renderLists();
+      return;
+    }
     let yt = track.source === 'youtube' ? track : alt && alt.source === 'youtube' ? alt : null;
     let sc = track.source === 'soundcloud' ? track : alt && alt.source === 'soundcloud' ? alt : null;
     let shown = track;
@@ -678,9 +695,8 @@
 
   function startEngine(track, startAt = 0) {
     const name = track.source;
-    const other = engineOf(name === 'youtube' ? 'soundcloud' : 'youtube');
     state.active = name;
-    other.pause();
+    allEngines.filter((e) => e !== engineOf(name)).forEach((e) => e.pause());
     state.cur = startAt;
     state.dur = track.durationSec || 0;
     state.playing = true;
@@ -787,7 +803,7 @@
 
   function failSkip(code, n) {
     state.errorStreak++;
-    toast(n && n.shown.source === 'soundcloud' ? t('play.unavailable') : t('play.failed', { code: code ? ` (code ${code})` : '' }));
+    toast(n && n.shown.source === 'local' ? t('play.localMissing') : n && n.shown.source === 'soundcloud' ? t('play.unavailable') : t('play.failed', { code: code ? ` (code ${code})` : '' }));
     if (state.errorStreak <= Math.max(3, state.queue.length)) setTimeout(() => next(true), 900);
   }
 
@@ -799,7 +815,7 @@
   let similarBusy = false;
   const SIMILAR_BATCH = 5; // how many recommended tracks are added at a time
   async function continueWithSimilar() {
-    if (similarBusy) return;
+    if (similarBusy || state.now.shown.source === 'local') return; // recommendations come from the services
     similarBusy = true;
     const token = state.token;
     const seed = state.now.shown;
@@ -909,7 +925,7 @@
     const track = n.shown;
     els.npTitle.textContent = track.title || t('np.untitled');
     els.npArtist.replaceChildren(...artistParts(track));
-    els.stage.dataset.source = track.source;
+    els.stage.dataset.source = track.source === 'local' && !track.cover ? 'none' : track.source;
     setCover(track.cover);
 
     // Video stays hidden unless the user asks for it (or the setting says to show it) and the track has one
@@ -917,7 +933,10 @@
     if (key !== shownKey) {
       shownKey = key;
       videoOn = autoVideo.checked && track.source === 'youtube' && !!track.hasVideo;
-      loadVersions(n);
+      if (track.source === 'local') {
+        els.npVersions.classList.add('hidden');
+        els.npVersions.replaceChildren();
+      } else loadVersions(n);
     }
     const canVideo = track.source === 'youtube' && !!track.hasVideo;
     els.btnVideo.classList.toggle('hidden', !canVideo);
@@ -933,6 +952,7 @@
     els.npYT.title = ytOff ? t('plat.ytBlocked') : '';
     els.npSC.classList.toggle('hidden', !scV);
     els.npBlockedMark.classList.toggle('hidden', !dead);
+    $('#npLocal').classList.toggle('hidden', track.source !== 'local');
     showTags(n);
     els.npBlockedMark.title = t('plat.none');
     els.npInfo.classList.toggle('dead', dead);
@@ -1032,8 +1052,7 @@
 
   function applyVolume() {
     const v = state.muted ? 0 : state.volume;
-    ytEngine.setVolume(v);
-    scEngine.setVolume(v);
+    allEngines.forEach((e) => e.setVolume(v));
     updateVolumeUI();
   }
 

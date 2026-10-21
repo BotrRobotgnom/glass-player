@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import * as logger from './logger.js';
+import { scanFolder, isAudioFile } from './local.js';
 
 const LOG_LIMIT = 5000; // chronological "recently played" entries; the per-track stats are never trimmed
 const COVER_SIZE = 512;
@@ -19,7 +20,7 @@ const key = (track) => `${track.source}:${track.id}`;
 function slim(track) {
   return {
     id: String(track.id),
-    source: track.source === 'soundcloud' ? 'soundcloud' : 'youtube',
+    source: track.source === 'soundcloud' ? 'soundcloud' : track.source === 'local' ? 'local' : 'youtube',
     title: String(track.title || '').slice(0, 300),
     artist: String(track.artist || '').slice(0, 300),
     artistId: String(track.artistId || '').slice(0, 60),
@@ -31,11 +32,13 @@ function slim(track) {
     cover: typeof track.cover === 'string' ? track.cover.slice(0, 600) : '',
     url: typeof track.url === 'string' ? track.url.slice(0, 600) : '',
     hasVideo: !!track.hasVideo,
+    // a file on this computer: where it is, and the playlist (linked folder) it came from
+    ...(track.source === 'local' ? { path: String(track.path || '').slice(0, 1000), playlistId: String(track.playlistId || '').slice(0, 60) } : {}),
   };
 }
 
 function validTrack(track) {
-  return !!track && typeof track === 'object' && track.id && (track.source === 'youtube' || track.source === 'soundcloud');
+  return !!track && typeof track === 'object' && track.id && (track.source === 'youtube' || track.source === 'soundcloud' || track.source === 'local');
 }
 
 // ---------- A small JSON file store: debounced, atomic writes, survives a corrupt file ----------
@@ -297,10 +300,11 @@ const summary = (pl) => ({
   duration: pl.tracks.reduce((sum, t) => sum + (t.durationSec || 0), 0),
   updated: pl.updated,
   cover: readCover(pl),
+  folder: pl.folder || '',
   covers: pl.tracks.slice(0, 4).map((t) => t.cover).filter(Boolean), // fallback mosaic when there is no own cover
 });
 
-const full = (pl) => ({ ...summary(pl), tracks: pl.tracks });
+const full = (pl) => ({ ...summary(pl), tracks: pl.tracks, folderName: pl.folder ? path.basename(pl.folder) || pl.folder : '' });
 
 const cleanName = (name) => String(name ?? '').trim().replace(/\s+/g, ' ').slice(0, 80);
 
@@ -367,18 +371,73 @@ export function getPlaylist(id) {
   return pl ? full(pl) : null;
 }
 
-export function createPlaylist({ name, coverToken } = {}) {
+export async function createPlaylist({ name, coverToken, folder } = {}) {
   const s = playlistStore.load();
   const pl = { id: crypto.randomUUID(), name: cleanName(name) || 'New playlist', cover: '', tracks: [], created: Date.now(), updated: Date.now() };
   if (coverToken && saveCover(pl.id, coverToken)) pl.cover = String(Date.now());
   s.playlists.push(pl);
+  if (folder) await linkFolder(pl, folder);
   playlistStore.changed();
   logger.info('library', `Playlist created: ${pl.name}`);
   return full(pl);
 }
 
+// ---------- Playlists linked to a folder of audio files ----------
+// The playlist mirrors the folder: files that appear are added, files that vanish are dropped. A track the user removed by hand
+// stays out (`hidden`). Tracks from YouTube / SoundCloud added to the same playlist are left alone.
+async function syncFolder(pl) {
+  if (!pl.folder) return { missing: false };
+  try {
+    await fs.promises.access(pl.folder);
+  } catch {
+    logger.warn('library', `Linked folder not found: ${pl.folder}`);
+    return { missing: true };
+  }
+  const hidden = new Set(pl.hidden || []);
+  const scanned = (await scanFolder(pl.folder)).filter((t) => !hidden.has(key(t))).map((t) => slim({ ...t, playlistId: pl.id }));
+  const others = pl.tracks.filter((t) => t.source !== 'local');
+  pl.tracks = [...scanned, ...others];
+  pl.updated = Date.now();
+  for (const t of scanned) localPaths.set(t.id, t.path);
+  playlistStore.changed();
+  return { missing: false };
+}
+
+async function linkFolder(pl, folder) {
+  pl.folder = path.resolve(String(folder));
+  pl.hidden = [];
+  await syncFolder(pl);
+}
+
+export async function rescanPlaylist(id) {
+  const pl = findPlaylist(id);
+  if (!pl) return null;
+  const { missing } = await syncFolder(pl);
+  return { ...full(pl), folderMissing: missing };
+}
+
+export async function pickFolder(parentWindow) {
+  const res = await dialog.showOpenDialog(parentWindow, { title: 'Choose a folder with music', properties: ['openDirectory'] });
+  return res.canceled || !res.filePaths[0] ? null : res.filePaths[0];
+}
+
+// Where a local track's file is. Only files that belong to the library are ever served.
+const localPaths = new Map();
+export function findLocalPath(id) {
+  const known = localPaths.get(id);
+  if (known) return known;
+  const consider = (t) => {
+    if (t && t.source === 'local' && t.path) localPaths.set(String(t.id), t.path);
+  };
+  for (const pl of playlistStore.load().playlists) pl.tracks.forEach(consider);
+  Object.values(historyStore.load().tracks).forEach((e) => consider(e.track));
+  Object.values(reactionStore.load().items).forEach((e) => consider(e.track));
+  const found = localPaths.get(id);
+  return found && isAudioFile(found) ? found : null;
+}
+
 // patch: { name?, coverToken?, removeCover? }
-export function updatePlaylist(id, patch = {}) {
+export async function updatePlaylist(id, patch = {}) {
   const pl = findPlaylist(id);
   if (!pl) return null;
   if (patch.name !== undefined) pl.name = cleanName(patch.name) || pl.name;
@@ -387,6 +446,12 @@ export function updatePlaylist(id, patch = {}) {
     pl.cover = '';
   } else if (patch.coverToken && saveCover(id, patch.coverToken)) {
     pl.cover = String(Date.now());
+  }
+  // patch.folder: a path links (and scans) that folder, null unlinks it (the tracks stay)
+  if (patch.folder) await linkFolder(pl, patch.folder);
+  else if (patch.folder === null && pl.folder) {
+    delete pl.folder;
+    delete pl.hidden;
   }
   pl.updated = Date.now();
   playlistStore.changed();
@@ -425,6 +490,8 @@ export function addToPlaylist(id, tracks) {
 export function removeFromPlaylist(id, trackKey) {
   const pl = findPlaylist(id);
   if (!pl) return null;
+  // a file of the linked folder removed by hand must not come back with the next scan
+  if (pl.folder && String(trackKey).startsWith('local:')) pl.hidden = [...new Set([...(pl.hidden || []), trackKey])];
   pl.tracks = pl.tracks.filter((t) => key(t) !== trackKey);
   pl.updated = Date.now();
   playlistStore.changed();

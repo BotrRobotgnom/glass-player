@@ -421,6 +421,15 @@ select option::checkmark { color: var(--accent); }
 .stage[data-source='youtube'] .stage-empty,
 .stage[data-source='soundcloud'] .stage-empty { display: none; }
 .stage[data-source='soundcloud'] img#cover { display: block; }
+.stage[data-source='local'] img#cover { display: block; }
+.stage[data-source='local'] .stage-empty { display: none; }
+.badge.local { color: var(--accent); border-color: var(--accent); }
+.plats svg.p-local { color: var(--accent); }
+.folder-row { display: flex; gap: 6px; }
+.folder-row .swap { margin-top: 0; }
+.folder-path { display: block; margin-top: 4px; color: var(--text-dim); word-break: break-all; }
+.pl-folder { color: var(--text-dim); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.pl-folder svg { width: 13px; height: 13px; }
 
 /* The SoundCloud iframe stays off-screen: only its sound is needed */
 .sc-frame { position: fixed; left: -9999px; top: 0; width: 320px; height: 166px; border: 0; }

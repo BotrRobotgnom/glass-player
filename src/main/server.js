@@ -3,6 +3,7 @@
 // The port is fixed so the origin (and with it localStorage with the settings) stays the same between runs.
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 
 const MIME = {
@@ -25,11 +26,66 @@ function listen(server, port) {
   });
 }
 
-export async function startServer(rootDir, preferredPort = 47831) {
+// Local files: /local/file/<id> (with Range support, so seeking works) and /local/cover/<id>.
+// `local` = { path(id) -> file or null, mime(file), cover(file) -> { data, type } | null }
+async function serveLocal(local, urlPath, req, res) {
+  const m = urlPath.match(/^\/local\/(file|cover)\/([0-9a-f]{8,40})$/);
+  const file = m && local.path(m[2]);
+  if (!file) {
+    res.writeHead(404).end('Not found');
+    return;
+  }
+  if (m[1] === 'cover') {
+    const cover = await local.cover(file);
+    if (!cover) res.writeHead(404).end('No cover');
+    else res.writeHead(200, { 'Content-Type': cover.type, 'Cache-Control': 'max-age=3600' }).end(cover.data);
+    return;
+  }
+  let stat;
+  try {
+    stat = await fs.stat(file);
+  } catch {
+    res.writeHead(404).end('File is gone');
+    return;
+  }
+  const type = local.mime(file);
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  let start = 0;
+  let end = stat.size - 1;
+  if (range && (range[1] || range[2])) {
+    if (range[1]) {
+      start = Number(range[1]);
+      if (range[2]) end = Math.min(end, Number(range[2]));
+    } else {
+      start = Math.max(0, stat.size - Number(range[2])); // "last N bytes"
+    }
+    if (start > end || start >= stat.size) {
+      res.writeHead(416, { 'Content-Range': `bytes */${stat.size}` }).end();
+      return;
+    }
+    res.writeHead(206, { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${stat.size}` });
+  } else {
+    res.writeHead(200, { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': stat.size });
+  }
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  const stream = createReadStream(file, { start, end });
+  stream.on('error', () => res.destroy());
+  res.on('close', () => stream.destroy());
+  stream.pipe(res);
+}
+
+export async function startServer(rootDir, preferredPort = 47831, local = null) {
   const root = path.resolve(rootDir);
   const server = http.createServer(async (req, res) => {
     try {
       const urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+      if (local && urlPath.startsWith('/local/')) {
+        await serveLocal(local, urlPath, req, res);
+        return;
+      }
       const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
       const file = path.resolve(root, rel);
       if (file !== root && !file.startsWith(root + path.sep)) {
