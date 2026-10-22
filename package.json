@@ -1,8 +1,8 @@
 {
-  "name": "glass-player",
-  "productName": "Glass Player",
-  "version": "0.5.1",
-  "description": "Glass-style desktop player: YouTube Music and SoundCloud in one window",
+  "name": "silverpane",
+  "productName": "Silverpane",
+  "version": "1.0.0",
+  "description": "Silverpane: a glass-style desktop player for YouTube Music, SoundCloud and your own files",
   "type": "module",
   "main": "src/main/main.js",
   "scripts": {
@@ -27,7 +27,7 @@
   "author": "BotrRobotgnom (https://github.com/BotrRobotgnom)",
   "build": {
     "appId": "com.botr.glassplayer",
-    "productName": "Glass Player",
+    "productName": "Silverpane",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -67,12 +67,12 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Glass Player",
-      "artifactName": "GlassPlayer-Setup-${version}.${ext}",
+      "shortcutName": "Silverpane",
+      "artifactName": "Silverpane-Setup-${version}.${ext}",
       "deleteAppDataOnUninstall": false
     },
     "portable": {
-      "artifactName": "GlassPlayer-Portable-${version}.${ext}"
+      "artifactName": "Silverpane-Portable-${version}.${ext}"
     },
     "linux": {
       "target": [
@@ -80,7 +80,7 @@
       ],
       "icon": "build/icon.png",
       "category": "AudioVideo",
-      "artifactName": "GlassPlayer-${version}.${ext}"
+      "artifactName": "Silverpane-${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
@@ -90,7 +90,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BotrRobotgnom/glass-player.git"
+    "url": "git+https://github.com/BotrRobotgnom/silverpane.git"
   },
-  "homepage": "https://github.com/BotrRobotgnom/glass-player"
+  "homepage": "https://github.com/BotrRobotgnom/silverpane"
 }

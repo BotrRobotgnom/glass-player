@@ -38,7 +38,7 @@ export function openDebugWindow(origin) {
     height: 600,
     minWidth: 640,
     minHeight: 360,
-    title: 'Glass Player: Debug log',
+    title: 'Silverpane: Debug log',
     backgroundColor: '#14161c',
     autoHideMenuBar: true,
     icon: path.join(__dirname, '..', '..', 'build', 'icon.png'),

@@ -31,7 +31,7 @@ export async function fetchPublishedReleases(cfg, { html = false, limit = 30, pr
   const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/releases?per_page=${limit}`, {
     headers: {
       Accept: html ? 'application/vnd.github.full+json' : 'application/vnd.github+json',
-      'User-Agent': 'glass-player',
+      'User-Agent': 'silverpane',
     },
     signal: AbortSignal.timeout(15000),
   });

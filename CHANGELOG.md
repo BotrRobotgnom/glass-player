@@ -4,6 +4,15 @@ The version scheme is described in [VERSIONING.md](VERSIONING.md).
 Each version has `### Added`, `### Changed` and `### Fixed` parts (only the ones that apply).
 The release notes on GitHub are built from this file automatically (see `scripts/release-notes.mjs`).
 
+## 1.0.0
+
+The first official release.
+
+### Changed
+- The app is now called **Silverpane** (it was "Glass Player"): window, tray, installer, shortcut and file names. Your history, playlists and settings are moved from the old `Glass Player` data folder to `Silverpane` on the first start (the old folder is used instead if moving fails), and automatic updates from older versions keep working. The "start with the system" setting is carried over.
+- The repository moved to `BotrRobotgnom/silverpane` (the old address redirects).
+- README rewritten for the current feature set.
+
 ## 0.5.1
 
 ### Fixed

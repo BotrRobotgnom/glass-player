@@ -82,7 +82,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ needs.draft.outputs.id }}
-        run: bash scripts/upload-assets.sh dist/GlassPlayer-Setup-*.exe dist/GlassPlayer-Setup-*.exe.blockmap dist/GlassPlayer-Portable-*.exe dist/latest.yml
+        run: bash scripts/upload-assets.sh dist/Silverpane-Setup-*.exe dist/Silverpane-Setup-*.exe.blockmap dist/Silverpane-Portable-*.exe dist/latest.yml
 
   linux:
     needs: draft
@@ -99,4 +99,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ needs.draft.outputs.id }}
-        run: bash scripts/upload-assets.sh dist/GlassPlayer-*.AppImage dist/latest-linux.yml
+        run: bash scripts/upload-assets.sh dist/Silverpane-*.AppImage dist/latest-linux.yml

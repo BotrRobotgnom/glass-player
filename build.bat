@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ========================================
-echo  Glass Player - Windows build
+echo  Silverpane - Windows build
 echo ========================================
 
 where node >nul 2>nul

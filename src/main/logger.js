@@ -41,10 +41,10 @@ export function initFileLogging() {
   try {
     const dir = app.getPath('logs');
     fs.mkdirSync(dir, { recursive: true });
-    filePath = path.join(dir, 'glass-player.log');
+    filePath = path.join(dir, 'silverpane.log');
     try {
       if (fs.statSync(filePath).size > MAX_FILE_BYTES) {
-        fs.renameSync(filePath, path.join(dir, 'glass-player.old.log'));
+        fs.renameSync(filePath, path.join(dir, 'silverpane.old.log'));
       }
     } catch {
       /* no file yet */

@@ -977,7 +977,7 @@
       els.btnSwap.classList.add('hidden');
     }
 
-    document.title = `${track.title} — Glass Player`;
+    document.title = `${track.title} — Silverpane`;
     updateMediaSession(track);
   }
 
@@ -1547,7 +1547,7 @@
   applyDevMode();
 
   window.api.version().then((v) => {
-    $('#appVersion').textContent = 'Glass Player v' + v;
+    $('#appVersion').textContent = 'Silverpane v' + v;
   }).catch(() => {});
 
   // ---------- Updates ----------

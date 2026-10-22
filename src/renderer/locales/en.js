@@ -3,7 +3,7 @@
 // register it with a <script> tag in index.html before i18n.js.
 window.__locales = window.__locales || {};
 window.__locales.en = {
-  'app.name': 'Glass Player',
+  'app.name': 'Silverpane',
 
   'search.clear': 'Clear',
   'np.ytUnavailable': 'YouTube version unavailable',
@@ -39,10 +39,10 @@ window.__locales.en = {
   'np.findingSimilar': 'Finding similar tracks…',
   'np.noSimilar': 'No similar tracks found',
   'settings.autostart': 'Start with the system',
-  'settings.autostartHint': 'Launch Glass Player when you sign in to your computer. It starts in the tray if the tray icon is available',
+  'settings.autostartHint': 'Launch Silverpane when you sign in to your computer. It starts in the tray if the tray icon is available',
   'settings.closeToTray': 'Keep running in the tray',
   'settings.closeToTrayHint': 'Closing the window hides it to the tray icon. Off: closing the window quits the app',
-  'tray.show': 'Show Glass Player',
+  'tray.show': 'Show Silverpane',
   'tray.hide': 'Hide window',
   'tray.quit': 'Quit',
   'tray.prev': 'Previous',

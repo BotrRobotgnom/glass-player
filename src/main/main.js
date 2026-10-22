@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import os from 'node:os';
+import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,13 +29,36 @@ const rendererDir = path.join(__dirname, '..', 'renderer');
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 
+// The app used to be called "Glass Player" and kept its data in a folder of that name. On the first start under the new
+// name the folder is moved (renamed, or copied when renaming is refused); if even that fails the old folder stays in use,
+// so history, playlists and settings are never lost. Must run before anything reads userData.
+{
+  const appData = app.getPath('appData');
+  const oldDir = path.join(appData, 'Glass Player');
+  const newDir = path.join(appData, 'Silverpane');
+  let dir = newDir;
+  if (fs.existsSync(oldDir) && !fs.existsSync(newDir)) {
+    try {
+      fs.renameSync(oldDir, newDir);
+    } catch {
+      try {
+        fs.cpSync(oldDir, newDir, { recursive: true });
+      } catch {
+        fs.rmSync(newDir, { recursive: true, force: true }); // a half-made copy must not be mistaken for the real data
+        dir = oldDir;
+      }
+    }
+  }
+  app.setPath('userData', dir);
+}
+
 // Errors that would otherwise vanish: keep them in the log (and tell the user about fatal ones)
 process.on('unhandledRejection', (reason) => {
   logger.error('main', 'Unhandled promise rejection', reason instanceof Error ? reason : { reason: String(reason) });
 });
 process.on('uncaughtException', (err) => {
   logger.error('main', 'Uncaught exception', err);
-  if (app.isReady()) dialog.showErrorBox('Glass Player: unexpected error', String(err?.stack || err));
+  if (app.isReady()) dialog.showErrorBox('Silverpane: unexpected error', String(err?.stack || err));
 });
 
 // ---------- Window effects (blur behind the window) ----------
@@ -87,7 +111,7 @@ function rendererLevel(level) {
 
 async function createWindow() {
   logger.initFileLogging();
-  logger.info('app', `Glass Player v${app.getVersion()} starting`, {
+  logger.info('app', `Silverpane v${app.getVersion()} starting`, {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
     node: process.versions.node,
@@ -118,7 +142,7 @@ async function createWindow() {
     minHeight: 560,
     frame: false,
     show: false,
-    title: 'Glass Player',
+    title: 'Silverpane',
     icon: path.join(__dirname, '..', '..', 'build', 'icon.png'),
     // A fully transparent background lets the system material (acrylic / vibrancy) show through.
     // Without a material the window is opaque, and the page paints its own solid background.
@@ -517,7 +541,10 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => trayIcon.showWindow());
-  app.whenReady().then(createWindow);
+  app.whenReady().then(() => {
+    createWindow();
+    autostart.migrateLegacy();
+  });
 }
 
 app.on('before-quit', () => {

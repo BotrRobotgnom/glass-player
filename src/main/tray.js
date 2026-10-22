@@ -17,7 +17,7 @@ let getOrigin = () => '';
 let popup = null;
 let popupHiddenAt = 0;
 let labels = {
-  show: 'Show Glass Player',
+  show: 'Show Silverpane',
   hide: 'Hide window',
   quit: 'Quit',
   prev: 'Previous',
@@ -99,7 +99,7 @@ function createPopup() {
     fullscreenable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    title: 'Glass Player',
+    title: 'Silverpane',
     webPreferences: {
       preload: path.join(__dirname, 'preload-tray.cjs'),
       contextIsolation: true,
@@ -163,7 +163,7 @@ ipcMain.on('tray:popupQuit', () => app.quit());
 if (process.env.GP_TEST) ipcMain.on('tray:test', (_e, bounds) => togglePopup(bounds)); // lets automated tests open the popup
 
 function tooltip() {
-  if (!now.hasTrack) return 'Glass Player';
+  if (!now.hasTrack) return 'Silverpane';
   const head = [now.title, now.artist].filter(Boolean).join(' — ');
   const time = now.dur ? `${fmt(now.cur)} / ${fmt(now.dur)}` : fmt(now.cur);
   // Windows cuts tooltips at 127 characters
@@ -230,7 +230,7 @@ export function createTray({ window, onCommand, origin }) {
     const icon = nativeImage.createFromPath(file).resize({ width: size, height: size, quality: 'best' });
     if (icon.isEmpty()) throw new Error('the tray icon file is missing');
     tray = new Tray(icon);
-    tray.setToolTip('Glass Player');
+    tray.setToolTip('Silverpane');
     tray.on('click', (_e, bounds) => (process.platform === 'linux' ? togglePopup(bounds) : toggleWindow())); // left click: show / hide the window
     tray.on('right-click', (_e, bounds) => togglePopup(bounds)); // right click: the popup player
     tray.on('double-click', showWindow);
