@@ -11,7 +11,7 @@ The first official release.
 ### Changed
 - The app is now called **Silverpane** (it was "Glass Player"): window, tray, installer, shortcut and file names. Your history, playlists and settings are moved from the old `Glass Player` data folder to `Silverpane` on the first start (the old folder is used instead if moving fails), and automatic updates from older versions keep working. The "start with the system" setting is carried over.
 - The repository moved to `BotrRobotgnom/silverpane` (the old address redirects).
-- README rewritten for the current feature set.
+- New icon: a glass vinyl record (application, installer, tray and the title bar). README rewritten for the current feature set, with screenshots.
 
 ## 0.5.1
 
